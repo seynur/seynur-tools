@@ -3,6 +3,9 @@ import time
 import shutil
 import subprocess
 import sys
+import argparse
+
+
 
 
 def take_args():
@@ -28,7 +31,6 @@ def take_args():
     print("---------------------------")
     print("End Date:", end_date)
     time.sleep(3)
-    print(type(splunk_home))
     return source_path, dest_path, dest_index, start_date, end_date, splunk_restart, splunk_home
 
 
@@ -126,8 +128,38 @@ def restart_splunk(splunk_home, splunk_restart):
     print(restart_result)
     return None
 
+def archive_help():
+    '''Returns None.
+    The argparse module also automatically generates help and usage.
+
+    '''
+
+    example_text = ''' example:
+
+    archive_path:   "/opt/splunk/var/lib/splunk/wineventlog/frozendb/"
+    restore_path:   "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
+    restore_index:  "archive_wineventlog"
+    start_date:     "Datetime format "%Y-%m-%d %H:%M:%S""
+    end_date:       "Datetime format "%Y-%m-%d %H:%M:%S""
+    splunk_restart: "splunk restart"
+
+    python3 "/opt/splunk/var/lib/splunk/wineventlog/frozendb/" "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
+    "archive_wineventlog" "2021-03-13 00:00:00" "2021-03-16 00:00:00" "splunk restart"
+    '''
+
+    parser = argparse.ArgumentParser(epilog=example_text, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("<archive_path>", type=str, help="Archive path where the frozen buckets are")
+    parser.add_argument("<restore_path>", type=str, help="The path where the frozen buckets are moved to rebuild")
+    parser.add_argument("<restore_index>", type=str, help="The index name where the buckets are rebuilt")
+    parser.add_argument("<start_date>", type=str, help="The starting date of the logs to be returned from the archive")
+    parser.add_argument("<end_date>", type=str, help="The end date of logs to be returned from the archive")
+    parser.add_argument("<splunk_restart>", type=str, help="Splunk needs to be restarted to complete the rebuilding process")
+    parser.add_argument('--version', action='version', version='%(prog)s 1.0.0')
+    args = parser.parse_args()
+
 
 def main():
+    archive_help()
     source_path, dest_path, dest_index, start_date, end_date, splunk_restart, splunk_home = take_args()
     start_epoch_time, end_epoch_time = handle_dates(start_date, end_date)
     found_buckets = find_buckets(source_path, start_epoch_time, end_epoch_time)
