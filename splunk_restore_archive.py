@@ -20,7 +20,7 @@ def take_args():
     start_date = sys.argv[4] # Datetime must be in this format  "%Y-%m-%d %H:%M:%S"
     end_date = sys.argv[5]
     splunk_restart = sys.argv[6]
-    splunk_home = os.environ['SPLUNK_HOME']
+    splunk_home = os.environ.get('SPLUNK_HOME') or '/opt/splunk'
     print("Source Path:", source_path)
     print("---------------------------")
     print("Destination Path:", dest_path)
@@ -107,7 +107,7 @@ def rebuild_buckets(found_buckets, dest_path, dest_index, splunk_home):
     '''
     subprocess.run(["cd","{}".format((splunk_home + "/bin") or ("/opt/splunk/bin"))])
     for bucket in found_buckets:
-        rebuild_result = subprocess.check_output(["splunk rebuild {}{} {}".format(dest_path, bucket, dest_index)], shell = True, universal_newlines = True)
+        rebuild_result = subprocess.check_output(["{}/bin/splunk rebuild {}{} {}".format(splunk_home, dest_path, bucket, dest_index)], shell = True, universal_newlines = True)
         print(rebuild_result)
         print("---------------------------")
     print("All buckets are rebuilt...")
@@ -124,7 +124,7 @@ def restart_splunk(splunk_home, splunk_restart):
     '''
     print("Restarting Splunk now...")
     subprocess.run(["cd", "{}".format((splunk_home + "/bin") or ("/opt/splunk/bin"))])
-    restart_result = subprocess.check_output("{}".format(splunk_restart), shell=True, universal_newlines=True)
+    restart_result = subprocess.check_output("{}/bin/{}".format(splunk_home, splunk_restart), shell=True, universal_newlines=True)
     print(restart_result)
     return None
 
