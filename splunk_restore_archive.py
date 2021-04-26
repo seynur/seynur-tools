@@ -67,7 +67,7 @@ def find_buckets(source_path, start_epoch_time, end_epoch_time):
         bucket = i.split("_", maxsplit=3)
         end = int(bucket[1])
         start = int(bucket[2])
-        if (end > start and start >= start_epoch_time and end <= end_epoch_time) or (start == end):
+        if (end > start or start == end) and (start >= start_epoch_time and end <= end_epoch_time):
             found_buckets.append(i)
     print("---------------------------")
     print("The number of buckets found: {}.".format(len(found_buckets)))
