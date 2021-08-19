@@ -20,6 +20,10 @@ def take_args():
     start_date = sys.argv[4] # Datetime must be in this format  "%Y-%m-%d %H:%M:%S"
     end_date = sys.argv[5]
     splunk_restart = sys.argv[6]
+    try:
+        integrity_check = sys.argv[7]
+    except:
+        integrity_check = None
     splunk_home = os.environ.get('SPLUNK_HOME') or '/opt/splunk'
     print("Source Path:", source_path)
     print("---------------------------")
@@ -93,7 +97,23 @@ def move_buckets(source_path, dest_path,found_buckets):
     print("Buckets are successfully moved...")
     return None
 
+def check_data_integrity(found_buckets, integrity_check, splunk_home):
+    '''Returns None.
+    Checks the data integrity one by one in the destination path (thaweddb).
 
+    Keyword arguments:
+    integrity_check -- check-integrity
+    found_buckets -- buckets found
+    splunk_home -- splunk home path
+    '''
+    subprocess.run(["cd","{}".format((splunk_home + "/bin") or ("/opt/splunk/bin"))])
+    for bucket in found_buckets:
+        intregrity_result = subprocess.check_output(["{}/bin/splunk {} -bucketPath {}".format(integrity_check, bucket)], shell = True, universal_newlines = True)
+        print(intregrity_result)
+        print("---------------------------")
+    print("Data integrity is checked...")
+    print("---------------------------")
+    return None
 
 def rebuild_buckets(found_buckets, dest_path, dest_index, splunk_home):
     '''Returns None.
@@ -142,9 +162,10 @@ def archive_help():
     start_date:     "Datetime format "%Y-%m-%d %H:%M:%S""
     end_date:       "Datetime format "%Y-%m-%d %H:%M:%S""
     splunk_restart: "splunk restart"
+    integrity_check: "check-integrity"
 
     python3 "/opt/splunk/var/lib/splunk/wineventlog/frozendb/" "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
-    "archive_wineventlog" "2021-03-13 00:00:00" "2021-03-16 00:00:00" "splunk restart"
+    "archive_wineventlog" "2021-03-13 00:00:00" "2021-03-16 00:00:00" "splunk restart" "check-integrity"
     '''
 
     parser = argparse.ArgumentParser(epilog=example_text, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -154,6 +175,7 @@ def archive_help():
     parser.add_argument("<start_date>", type=str, help="The starting date of the logs to be returned from the archive")
     parser.add_argument("<end_date>", type=str, help="The end date of logs to be returned from the archive")
     parser.add_argument("<splunk_restart>", type=str, help="Splunk needs to be restarted to complete the rebuilding process")
+    parser.add_argument("<integrity_check>", nargs="?",type=str, help="Checks the integrity of buckets to be rebuilt")
     parser.add_argument('--version', action='version', version='%(prog)s 1.0.0')
     args = parser.parse_args()
 
@@ -163,6 +185,8 @@ def main():
     source_path, dest_path, dest_index, start_date, end_date, splunk_restart, splunk_home = take_args()
     start_epoch_time, end_epoch_time = handle_dates(start_date, end_date)
     found_buckets = find_buckets(source_path, start_epoch_time, end_epoch_time)
+    if integrity_check:
+        check_data_integrity(found_buckets, integrity_check, splunk_home)
     move_buckets(source_path, dest_path, found_buckets)
     rebuild_buckets(found_buckets, dest_path, dest_index, splunk_home)
     restart_splunk(splunk_home, splunk_restart)
