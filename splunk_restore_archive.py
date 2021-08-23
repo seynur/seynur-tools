@@ -35,7 +35,7 @@ def take_args():
     print("---------------------------")
     print("End Date:", end_date)
     time.sleep(3)
-    return source_path, dest_path, dest_index, start_date, end_date, splunk_restart, splunk_home
+    return source_path, dest_path, dest_index, start_date, end_date, splunk_restart, splunk_home, integrity_check
 
 
 
