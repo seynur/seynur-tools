@@ -164,7 +164,7 @@ def archive_help():
     splunk_restart: "splunk restart"
     integrity_check: "check-integrity"
 
-    python3 "/opt/splunk/var/lib/splunk/wineventlog/frozendb/" "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
+    python3 splunk_restore_archive.py  "/opt/splunk/var/lib/splunk/wineventlog/frozendb/" "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
     "archive_wineventlog" "2021-03-13 00:00:00" "2021-03-16 00:00:00" "splunk restart" "check-integrity"
     '''
 
