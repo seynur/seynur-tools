@@ -182,7 +182,7 @@ def archive_help():
 
 def main():
     archive_help()
-    source_path, dest_path, dest_index, start_date, end_date, splunk_restart, splunk_home = take_args()
+    source_path, dest_path, dest_index, start_date, end_date, splunk_restart, splunk_home, integrity_check = take_args()
     start_epoch_time, end_epoch_time = handle_dates(start_date, end_date)
     found_buckets = find_buckets(source_path, start_epoch_time, end_epoch_time)
     if integrity_check:
