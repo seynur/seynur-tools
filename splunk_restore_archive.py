@@ -97,7 +97,7 @@ def move_buckets(source_path, dest_path,found_buckets):
     print("Buckets are successfully moved...")
     return None
 
-def check_data_integrity(found_buckets, integrity_check, splunk_home):
+def check_data_integrity(source_path, found_buckets, integrity_check, splunk_home):
     '''Returns None.
     Checks the data integrity one by one in the destination path (thaweddb).
 
@@ -108,7 +108,8 @@ def check_data_integrity(found_buckets, integrity_check, splunk_home):
     '''
     subprocess.run(["cd","{}".format((splunk_home + "/bin") or ("/opt/splunk/bin"))])
     for bucket in found_buckets:
-        intregrity_result = subprocess.check_output(["{}/bin/splunk {} -bucketPath {}".format(splunk_home, integrity_check, bucket)], shell = True, universal_newlines = True)
+        bucket_path = source_path + bucket
+        intregrity_result = subprocess.check_output(["{}/bin/splunk {} -bucketPath {}".format(splunk_home, integrity_check, bucket_path)], shell = True, universal_newlines = True)
         print(intregrity_result)
         print("---------------------------")
     print("Data integrity is checked...")
@@ -186,7 +187,7 @@ def main():
     start_epoch_time, end_epoch_time = handle_dates(start_date, end_date)
     found_buckets = find_buckets(source_path, start_epoch_time, end_epoch_time)
     if integrity_check:
-        check_data_integrity(found_buckets, integrity_check, splunk_home)
+        check_data_integrity(source_path, found_buckets, integrity_check, splunk_home)
     move_buckets(source_path, dest_path, found_buckets)
     rebuild_buckets(found_buckets, dest_path, dest_index, splunk_home)
     restart_splunk(splunk_home, splunk_restart)
