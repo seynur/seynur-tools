@@ -108,7 +108,7 @@ def check_data_integrity(found_buckets, integrity_check, splunk_home):
     '''
     subprocess.run(["cd","{}".format((splunk_home + "/bin") or ("/opt/splunk/bin"))])
     for bucket in found_buckets:
-        intregrity_result = subprocess.check_output(["{}/bin/splunk {} -bucketPath {}".format(integrity_check, bucket)], shell = True, universal_newlines = True)
+        intregrity_result = subprocess.check_output(["{}/bin/splunk {} -bucketPath {}".format(splunk_home, integrity_check, bucket)], shell = True, universal_newlines = True)
         print(intregrity_result)
         print("---------------------------")
     print("Data integrity is checked...")
