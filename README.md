@@ -6,22 +6,32 @@
 usage: splunk_restore_archive.py [-h] [-a ARCHIVE_PATH] [-r RESTORE_PATH] [-i RESTORE_INDEX] [-s START_DATE] [-e END_DATE] [-sh SPLUNK_HOME] [--restart_splunk] [--check_integrity] [--version]
 
 optional arguments:
+
   -h, --help            show this help message and exit
+  
   --restart_splunk      Splunk needs to be restarted to complete the rebuilding process
+  
   --check_integrity     Checks the integrity of buckets to be rebuild
+  
   --version             show program's version number and exit
 
 arguments:
+
   -a ARCHIVE_PATH, --archive_path ARCHIVE_PATH
                         Archive path where the frozen buckets are
+                        
   -r RESTORE_PATH, --restore_path RESTORE_PATH
                         The path where the frozen buckets are moved to rebuild
+                        
   -i RESTORE_INDEX, --restore_index RESTORE_INDEX
                         The index name where the buckets are rebuilt
+                        
   -s START_DATE, --start_date START_DATE
                         The starting date of the logs to be returned from the archive
+                        
   -e END_DATE, --end_date END_DATE
                         The end date of logs to be returned from the archive
+                        
   -sh SPLUNK_HOME, --splunk_home SPLUNK_HOME
                         Splunk home path
 
