@@ -240,6 +240,7 @@ def archive_help():
     restore_index:  "archive_wineventlog"
     start_date:     "Datetime format "%Y-%m-%d %H:%M:%S""
     end_date:       "Datetime format "%Y-%m-%d %H:%M:%S""
+    splunk_home:    "/opt/splunk"
 
     python3 splunk_restore_archive.py  -a "/opt/splunk/var/lib/splunk/wineventlog/frozendb/" -r "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
     -i "archive_wineventlog" -s "2021-03-13 00:00:00" -e "2021-03-16 00:00:00" -sh "/opt/splunk" --restart_splunk --check_integrity
