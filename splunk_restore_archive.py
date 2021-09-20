@@ -10,16 +10,16 @@ from datetime import datetime
 
 
 
-def handle_dates(start_date,end_date):
+def handle_dates(oldest_time,newest_time):
     '''Returns start and end datetime in int.
     Converts datetime to epoch to find correct buckets.
 
     Keyword arguments:
-    start_date -- start date ("%Y-%m-%d %H:%M:%S")
-    end_date -- end date ("%Y-%m-%d %H:%M:%S")
+    oldest_time -- start date ("%Y-%m-%d %H:%M:%S")
+    newest_time -- end date ("%Y-%m-%d %H:%M:%S")
     '''
     epoch_time = []
-    for date in [start_date,end_date]:
+    for date in [oldest_time,newest_time]:
         date = time.strptime(date, "%Y-%m-%d %H:%M:%S")
         epoch_time.append(int(time.mktime(date).__str__().split(".")[0]))
     start_epoch_time = epoch_time[0]
@@ -235,34 +235,34 @@ def archive_help():
 
     example_text = ''' example:
 
-    archive_path:   "/opt/splunk/var/lib/splunk/wineventlog/frozendb/"
-    restore_path:   "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
-    restore_index:  "archive_wineventlog"
-    start_date:     "Datetime format "%Y-%m-%d %H:%M:%S""
-    end_date:       "Datetime format "%Y-%m-%d %H:%M:%S""
+    frozendb:   "/opt/splunk/var/lib/splunk/wineventlog/frozendb/"
+    thaweddb:   "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
+    index:  "archive_wineventlog"
+    oldest_time:     "Datetime format "%Y-%m-%d %H:%M:%S""
+    newest_time:       "Datetime format "%Y-%m-%d %H:%M:%S""
     splunk_home:    "/opt/splunk"
 
-    python3 splunk_restore_archive.py  -a "/opt/splunk/var/lib/splunk/wineventlog/frozendb/" -r "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
-    -i "archive_wineventlog" -s "2021-03-13 00:00:00" -e "2021-03-16 00:00:00" -sh "/opt/splunk" --restart_splunk --check_integrity
+    python3 splunk_restore_archive.py  -f "/opt/splunk/var/lib/splunk/wineventlog/frozendb/" -t "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
+    -i "archive_wineventlog" -o "2021-03-13 00:00:00" -n "2021-03-16 00:00:00" -oh "/opt/splunk" --testart_splunk --check_integrity
 
-    python3 splunk_restore_archive.py  --archive_path "/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --restore_path "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
-    --restore_index "archive_wineventlog" --start_date "2021-03-13 00:00:00" --end_date "2021-03-16 00:00:00" --splunk_home "/opt/splunk"
+    python3 splunk_restore_archive.py  --frozendb "/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --thaweddb "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
+    --index "archive_wineventlog" --oldest_time "2021-03-13 00:00:00" --newest_time "2021-03-16 00:00:00" --oplunk_home "/opt/splunk"
 
-    python3 splunk_restore_archive.py  -a="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" -r="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
-    -i="archive_wineventlog" -s="2021-03-13 00:00:00" -e="2021-03-16 00:00:00" -sh="/opt/splunk"  --check_integrity
+    python3 splunk_restore_archive.py  -f="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" -t="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
+    -i="archive_wineventlog" -o="2021-03-13 00:00:00" -n="2021-03-16 00:00:00" -oh="/opt/splunk"  --check_integrity
 
-    python3 splunk_restore_archive.py  --archive_path="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --restore_path="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
-    --restore_index="archive_wineventlog" --start_date="2021-03-13 00:00:00" --end_date="2021-03-16 00:00:00" --splunk_home="/opt/splunk" --restart_splunk
+    python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --thaweddb="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
+    --index="archive_wineventlog" --oldest_time="2021-03-13 00:00:00" --newest_time="2021-03-16 00:00:00" --oplunk_home="/opt/splunk" --testart_splunk
     '''
 
     parser = argparse.ArgumentParser(epilog=example_text, formatter_class=argparse.RawDescriptionHelpFormatter)
     required_args = parser.add_argument_group("arguments")
-    required_args.add_argument("-a","--archive_path", type=str, help="Archive path where the frozen buckets are")
-    required_args.add_argument("-r", "--restore_path", type=str, help="The path where the frozen buckets are moved to rebuild")
-    required_args.add_argument("-i", "--restore_index", type=str, help="The index name where the buckets are rebuilt")
-    required_args.add_argument("-s", "--start_date", type=str, help="The starting date of the logs to be returned from the archive")
-    required_args.add_argument("-e", "--end_date", type=str, help="The end date of logs to be returned from the archive")
-    required_args.add_argument("-sh", "--splunk_home", type=str,help="Splunk home path")
+    required_args.add_argument("-f","--frozendb", type=str, help="Frozendb path where the frozen buckets are")
+    required_args.add_argument("-t", "--thaweddb", type=str, help="The path where the frozen buckets are moved to rebuild")
+    required_args.add_argument("-i", "--index", type=str, help="The index name where the buckets are rebuilt")
+    required_args.add_argument("-o", "--oldest_time", type=str, help="The starting date of the logs to be returned from the archive")
+    required_args.add_argument("-n", "--newest_time", type=str, help="The end date of logs to be returned from the archive")
+    required_args.add_argument("-s", "--splunk_home", type=str,help="Splunk home path")
     parser.add_argument("--restart_splunk", action='store_const', const=restart_splunk, help="Splunk needs to be restarted to complete the rebuilding process")
     parser.add_argument("--check_integrity", action='store_const', const=check_data_integrity, help="Checks the integrity of buckets to be rebuild")
     parser.add_argument('--version', action='version', version='%(prog)s 1.0.0')
@@ -272,13 +272,13 @@ def archive_help():
 
 def main():
     args = archive_help()
-    start_epoch_time, end_epoch_time = handle_dates(args.start_date, args.end_date)
-    buckets_found = find_buckets(args.archive_path, start_epoch_time, end_epoch_time)
+    start_epoch_time, end_epoch_time = handle_dates(args.oldest_time, args.newest_time)
+    buckets_found = find_buckets(args.frozendb, start_epoch_time, end_epoch_time)
     if args.check_integrity:
-        buckets_found, buckets_failed_integrity, buckets_passed_integrity, buckets_not_checked_integrity = check_data_integrity(args.archive_path, buckets_found, args.splunk_home)
+        buckets_found, buckets_failed_integrity, buckets_passed_integrity, buckets_not_checked_integrity = check_data_integrity(args.frozendb, buckets_found, args.splunk_home)
         log_data_integrity(buckets_not_checked_integrity, buckets_failed_integrity, buckets_passed_integrity)
-    move_buckets(args.archive_path, args.restore_path, buckets_found)
-    buckets_passed, buckets_failed = rebuild_buckets(buckets_found, args.restore_path, args.restore_index, args.splunk_home)
+    move_buckets(args.frozendb, args.thaweddb, buckets_found)
+    buckets_passed, buckets_failed = rebuild_buckets(buckets_found, args.thaweddb, args.index, args.splunk_home)
     log_rebuilt_results(buckets_passed, buckets_failed)
     if args.restart_splunk:
         restart_splunk(args.splunk_home)
