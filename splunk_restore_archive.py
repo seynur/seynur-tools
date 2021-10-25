@@ -48,7 +48,7 @@ def find_buckets(source_path, start_epoch_time, end_epoch_time):
     return buckets_found
 
 
-def move_buckets(source_path, dest_path,buckets_found):
+def copy_buckets(source_path, dest_path,buckets_found):
     '''Returns None.
     Moves buckets from source path (frozendb) to destination path (thaweddb).
 
@@ -277,7 +277,7 @@ def main():
     if args.check_integrity:
         buckets_found, buckets_failed_integrity, buckets_passed_integrity, buckets_not_checked_integrity = check_data_integrity(args.frozendb, buckets_found, args.splunk_home)
         log_data_integrity(buckets_not_checked_integrity, buckets_failed_integrity, buckets_passed_integrity)
-    move_buckets(args.frozendb, args.thaweddb, buckets_found)
+    copy_buckets(args.frozendb, args.thaweddb, buckets_found)
     buckets_passed, buckets_failed = rebuild_buckets(buckets_found, args.thaweddb, args.index, args.splunk_home)
     log_rebuilt_results(buckets_passed, buckets_failed)
     if args.restart_splunk:
