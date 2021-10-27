@@ -1,9 +1,9 @@
 #### Documentation
 
-**python3 splunk_restore_archive.py --help**
+**python3 restore-archive-for-splunk.py --help**
 
 
-usage: splunk_restore_archive.py [-h] [-a ARCHIVE_PATH] [-r RESTORE_PATH] [-i RESTORE_INDEX] [-s START_DATE] [-e END_DATE] [-sh SPLUNK_HOME] [--restart_splunk] [--check_integrity] [--version]
+usage: restore-archive-for-splunk.py [-h] [-a ARCHIVE_PATH] [-r RESTORE_PATH] [-i RESTORE_INDEX] [-s START_DATE] [-e END_DATE] [-sh SPLUNK_HOME] [--restart_splunk] [--check_integrity] [--version]
 
 optional arguments:
 
@@ -57,29 +57,3 @@ arguments:
     --restore_index="archive_wineventlog" --start_date="2021-03-13 00:00:00" --end_date="2021-03-16 00:00:00" --splunk_home="/opt/splunk" --restart_splunk
 
 
-
-
-**python3 cleanup_archive_for_splunk.py --help**
-
-
-usage: cleanup_archive_for_splunk.py [-h] [--version]
-                                     <archive_path> <command> <moving_path>
-
-positional arguments:
-  <archive_path>  Archive path where the frozen buckets are
-  <command>       Required operation on buckets which are show, move, and
-                  remove
-  <moving_path>   Moving path for the duplicate buckets. It is used if the
-                  command is 'move'
-
-optional arguments:
-  -h, --help      show this help message and exit
-  --version       show program's version number and exit
-
- example:
-
-    archive_path:   "/opt/splunk/var/lib/splunk/wineventlog/frozendb/"
-    command:        "move"
-    moving_path:    "/archive_buckets/indexes/wineventlog/"
-
-    python3 cleanup_archive_for_splunk.py "/opt/splunk/var/lib/splunk/wineventlog/frozendb/" "move" "/archive_buckets/indexes/wineventlog/"
