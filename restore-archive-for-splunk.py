@@ -58,7 +58,7 @@ def copy_buckets(source_path, dest_path,buckets_found):
     buckets_found -- buckets found
     '''
     print("---------------------------")
-    print("Moving Buckets...")
+    print("Copying Buckets...")
     for bucket in buckets_found:
         source_file = source_path + bucket
         destination = dest_path + bucket
@@ -120,7 +120,7 @@ def check_data_integrity(source_path, buckets_found, splunk_home):
     return buckets_found, buckets_failed_integrity, buckets_passed_integrity, buckets_not_checked_integrity
 
 
-def log_data_integrity(buckets_not_checked_integrity, buckets_failed_integrity, buckets_passed_integrity):
+def log_data_integrity(buckets_not_checked_integrity, buckets_failed_integrity, buckets_passed_integrity, splunk_home):
     '''Returns None.
     Creates a log file about failed, passed and buckets without data integrity control.
 
@@ -131,7 +131,13 @@ def log_data_integrity(buckets_not_checked_integrity, buckets_failed_integrity, 
     buckets_passed_integrity -- buckets passed the integrity check
     '''
     path = os.getcwd()
-    os.chdir("logs/")
+    log_path = "/var/log/splunk/"
+    splunk_log_path = splunk_home + log_path
+    if os.path.exists("logs"):
+        os.chdir("logs")
+    else:
+        os.chdir(splunk_log_path)
+
     file_name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S_integrity_check.log")
     f = open(file_name, "w+")
     f.write("Timestamp: {}\r\n\r\n".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
@@ -186,7 +192,7 @@ def rebuild_buckets(buckets_found, dest_path, dest_index, splunk_home):
     print("---------------------------")
     return buckets_passed, buckets_failed
 
-def log_rebuilt_results(buckets_passed, buckets_failed):
+def log_rebuilt_results(buckets_passed, buckets_failed, splunk_home):
     '''Returns None.
     Logs the failed and passed buckets names.
 
@@ -195,7 +201,15 @@ def log_rebuilt_results(buckets_passed, buckets_failed):
     buckets_failed -- buckets that failed the rebuilding process
 
     '''
-    os.chdir("logs/")
+
+    path = os.getcwd()
+    log_path="/var/log/splunk/"
+    splunk_log_path= splunk_home + log_path
+    if os.path.exists("logs"):
+        os.chdir("logs")
+    else:
+        os.chdir(splunk_log_path)
+
     file_name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S_buckets_rebuilt.log")
     f = open(file_name, "w+")
     f.write("Timestamp: {}\r\n\r\n".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
@@ -211,6 +225,7 @@ def log_rebuilt_results(buckets_passed, buckets_failed):
     for i, bucket in zip(range(len(buckets_failed)), buckets_failed):
         f.write("{}- {}\r\n".format(i + 1, bucket))
     f.close()
+    os.chdir(path)
     return None
 
 
@@ -276,10 +291,10 @@ def main():
     buckets_found = find_buckets(args.frozendb, start_epoch_time, end_epoch_time)
     if args.check_integrity:
         buckets_found, buckets_failed_integrity, buckets_passed_integrity, buckets_not_checked_integrity = check_data_integrity(args.frozendb, buckets_found, args.splunk_home)
-        log_data_integrity(buckets_not_checked_integrity, buckets_failed_integrity, buckets_passed_integrity)
+        log_data_integrity(buckets_not_checked_integrity, buckets_failed_integrity, buckets_passed_integrity, args.splunk_home)
     copy_buckets(args.frozendb, args.thaweddb, buckets_found)
     buckets_passed, buckets_failed = rebuild_buckets(buckets_found, args.thaweddb, args.index, args.splunk_home)
-    log_rebuilt_results(buckets_passed, buckets_failed)
+    log_rebuilt_results(buckets_passed, buckets_failed, args.splunk_home)
     if args.restart_splunk:
         restart_splunk(args.splunk_home)
 
