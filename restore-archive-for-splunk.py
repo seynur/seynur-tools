@@ -15,33 +15,33 @@ def handle_dates(oldest_time,newest_time):
     Converts datetime to epoch to find correct buckets.
 
     Keyword arguments:
-    oldest_time -- start date ("%Y-%m-%d %H:%M:%S")
-    newest_time -- end date ("%Y-%m-%d %H:%M:%S")
+    oldest_time -- oldest date ("%Y-%m-%d %H:%M:%S")
+    newest_time -- newest date ("%Y-%m-%d %H:%M:%S")
     '''
     epoch_time = []
     for date in [oldest_time,newest_time]:
         date = time.strptime(date, "%Y-%m-%d %H:%M:%S")
         epoch_time.append(int(time.mktime(date).__str__().split(".")[0]))
-    start_epoch_time = epoch_time[0]
-    end_epoch_time = epoch_time[1]
-    return start_epoch_time, end_epoch_time
+    oldest_epoch_time = epoch_time[0]
+    newest_epoch_time = epoch_time[1]
+    return oldest_epoch_time, newest_epoch_time
 
-def find_buckets(source_path, start_epoch_time, end_epoch_time):
+def find_buckets(source_path, oldest_epoch_time, newest_epoch_time):
     '''Returns the list buckets_found.
-    Finds buckets in source path according to start and end epoch time.
+    Finds buckets in source path according to oldest and newest epoch time.
 
     Keyword arguments:
     source_path -- archive path (frozendb)
-    start_epoch_time -- start date
-    end_epoch_time -- end date
+    oldest_epoch_time -- oldest date
+    newest_epoch_time -- newest date
     '''
     bucket_list = os.listdir(source_path)
     buckets_found = []
     for i in bucket_list:
         bucket = i.split("_", maxsplit=3)
-        end = int(bucket[1])
-        start = int(bucket[2])
-        if (end > start or start == end) and (start >= start_epoch_time and end <= end_epoch_time):
+        newest_bucket_epoch_time = int(bucket[1])
+        oldest_bucket_epoch_time = int(bucket[2])
+        if (newest_bucket_epoch_time >= oldest_epoch_time and oldest_bucket_epoch_time <= newest_epoch_time):
             buckets_found.append(i)
     print("---------------------------")
     print("The number of buckets found: {}.".format(len(buckets_found)))
@@ -275,8 +275,8 @@ def archive_help():
     required_args.add_argument("-f","--frozendb", type=str, help="Frozendb path where the frozen buckets are")
     required_args.add_argument("-t", "--thaweddb", type=str, help="The path where the frozen buckets are moved to rebuild")
     required_args.add_argument("-i", "--index", type=str, help="The index name where the buckets are rebuilt")
-    required_args.add_argument("-o", "--oldest_time", type=str, help="The starting date of the logs to be returned from the archive")
-    required_args.add_argument("-n", "--newest_time", type=str, help="The end date of logs to be returned from the archive")
+    required_args.add_argument("-o", "--oldest_time", type=str, help="The oldest date of the logs to be returned from the archive")
+    required_args.add_argument("-n", "--newest_time", type=str, help="The newest date of logs to be returned from the archive")
     required_args.add_argument("-s", "--splunk_home", type=str,help="Splunk home path")
     parser.add_argument("--restart_splunk", action='store_const', const=restart_splunk, help="Splunk needs to be restarted to complete the rebuilding process")
     parser.add_argument("--check_integrity", action='store_const', const=check_data_integrity, help="Checks the integrity of buckets to be rebuild")
@@ -287,8 +287,8 @@ def archive_help():
 
 def main():
     args = archive_help()
-    start_epoch_time, end_epoch_time = handle_dates(args.oldest_time, args.newest_time)
-    buckets_found = find_buckets(args.frozendb, start_epoch_time, end_epoch_time)
+    oldest_epoch_time, newest_epoch_time = handle_dates(args.oldest_time, args.newest_time)
+    buckets_found = find_buckets(args.frozendb, oldest_epoch_time, newest_epoch_time)
     if args.check_integrity:
         buckets_found, buckets_failed_integrity, buckets_passed_integrity, buckets_not_checked_integrity = check_data_integrity(args.frozendb, buckets_found, args.splunk_home)
         log_data_integrity(buckets_not_checked_integrity, buckets_failed_integrity, buckets_passed_integrity, args.splunk_home)
