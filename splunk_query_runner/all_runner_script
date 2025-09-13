@@ -1,0 +1,21 @@
+#!/bin/bash
+
+echo "STARTING ALL RUNNER SCRIPT"
+echo ""
+mkdir outputs
+echo ""
+
+echo "Updating dates for input files"
+echo ""
+python3 update_dates_for_input_files.py
+echo ""
+
+echo ""
+echo "Deleting old output files"
+echo ""
+rm outputs/*
+
+echo ""
+echo "Running splunk_query_runner.py"
+echo ""
+python3 splunk_query_runner.py -i input_list.csv -o outputs/ -tk user.conf -sh 127.0.0.1 -sp 8089

@@ -1,0 +1,1 @@
+curl -k -u <USER>:<PASSWORD> -X POST https://<HOST>:<MANAGMENT_PORT>/services/authorization/tokens?output_mode=json --data name=<USERNAME_FOR_THE_CREATED_TOKEN> --data-urlencode expires_on=+365d --data audience=<AUDIANCE_TEXT> 

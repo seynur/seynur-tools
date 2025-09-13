@@ -1,0 +1,6 @@
+title;earliest_date;earliest_time;latest_date;latest_time;spl;output_format;param
+EXAMPLE_internal;01/09/2025;00:00:00;03/09/2025;00:00:00;index=_internal earliest=-15m | table host, log_level, sourcetype, _time | head  15;csv;false
+EXAMPLE_tstats;01/09/2025;00:00:00;03/09/2025;00:00:00;|tstats count where index=_internal by sourcetype | head 5;csv;false
+EXAMPLE_empty;01/09/2025;00:00:00;03/09/2025;00:00:00;index=nosuchindex;csv;false
+EXAMPLE_lisans;01/09/2025;00:00:00;03/09/2025;00:00:00;| savedsearch "saved-searchname";csv;false
+EXAMPLE_dbxquery;01/09/2025;00:00:00;03/09/2025;00:00:00;| dbxquery connection=<my-connection> query="SELECT * FROM xxx_table WHERE timestamp > ? ORDER BY timestamp ASC" params="2025-09-03 17:05:39";csv;true
