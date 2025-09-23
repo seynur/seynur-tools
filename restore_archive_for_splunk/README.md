@@ -1,4 +1,21 @@
-#### Documentation
+# Documentation
+
+## Directory Structure
+
+```
+restore_archive_for_splunk/
+├── restore-archive-for-splunk.py    # Main script
+├── README.md                        # Main documentation
+├── LICENSE                          # License file
+└── test/                           # Test subfolder
+    ├── test_bucket_parsing.py      # Unit tests
+    ├── create_test_data.py         # Test data generator
+    ├── run_tests.py                # Test runner
+    └── README.md                   # Detailed test documentation
+```
+
+
+## Running the script
 
 You can create "logs" folder under your current directory or the logs will be written to splunk_home + "/var/log/splunk/" directory.
 
@@ -40,22 +57,43 @@ arguments:
                         Splunk home path
 
 
-```sh
+```bash
 python3 splunk_restore_archive.py  -f "/opt/splunk/var/lib/splunk/wineventlog/frozendb/" -t "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
   -i "archive_wineventlog" -o "2021-03-13 00:00:00" -n "2021-03-16 00:00:00" -s "/opt/splunk" --restart_splunk --check_integrity
 ```
 
-```sh
+```bash
 python3 splunk_restore_archive.py  --frozendb "/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --thaweddb "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
 --index "archive_wineventlog" --oldest_time "2021-03-13 00:00:00" --newest_time "2021-03-16 00:00:00" --splunk_home "/opt/splunk"
 ```
 
-```sh
+```bash
 python3 splunk_restore_archive.py  -f="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" -t="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
 -i="archive_wineventlog" -o="2021-03-13 00:00:00" -n="2021-03-16 00:00:00" -s="/opt/splunk"  --check_integrity
 ```
 
-```sh
+```bash
 python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --thaweddb="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
 --index="archive_wineventlog" --oldest_time="2021-03-13 00:00:00" --newest_time="2021-03-16 00:00:00" --splunk_home="/opt/splunk" --restart_splunk
 ```
+
+## Testing
+
+The project includes a comprehensive test suite to verify bucket parsing and validation logic. All test files are organized in the `test/` subfolder.
+
+### Running Tests
+
+```bash
+cd test/
+
+# Run all tests
+python3 run_tests.py --all
+
+# Run only unit tests
+python3 run_tests.py --unit-tests
+
+# Create test data
+python3 run_tests.py --create-data
+```
+
+For detailed testing documentation, see `test/README.md` and `TEST_STRUCTURE.md`.
