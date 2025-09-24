@@ -20,8 +20,18 @@ def handle_dates(oldest_time,newest_time):
     '''
     epoch_time = []
     for date in [oldest_time,newest_time]:
-        date = time.strptime(date, "%Y-%m-%d %H:%M:%S")
-        epoch_time.append(int(time.mktime(date).__str__().split(".")[0]))
+        try:
+            date = time.strptime(date, "%Y-%m-%d %H:%M:%S")
+            epoch_time.append(int(time.mktime(date).__str__().split(".")[0]))
+        except ValueError as e:
+            print(f"Error: Invalid date format '{date}'. Expected format: '%Y-%m-%d %H:%M:%S'. Error: {e}")
+            sys.exit(1)
+    
+    # Ensure we have exactly 2 epoch times
+    if len(epoch_time) != 2:
+        print(f"Error: Expected 2 dates, but processed {len(epoch_time)} dates")
+        sys.exit(1)
+        
     oldest_epoch_time = epoch_time[0]
     newest_epoch_time = epoch_time[1]
     return oldest_epoch_time, newest_epoch_time
@@ -35,12 +45,24 @@ def find_buckets(source_path, oldest_epoch_time, newest_epoch_time):
     oldest_epoch_time -- oldest date
     newest_epoch_time -- newest date
     '''
-    bucket_list = os.listdir(source_path)
+    try:
+        bucket_list = os.listdir(source_path)
+    except (OSError, FileNotFoundError) as e:
+        print(f"Error: Cannot access source path '{source_path}': {e}")
+        return []
     buckets_found = []
     for i in bucket_list:
         bucket = i.split("_", maxsplit=3)
-        newest_bucket_epoch_time = int(bucket[1])
-        oldest_bucket_epoch_time = int(bucket[2])
+        # Check if bucket name has the expected format (at least 4 parts: index_epoch1_epoch2_randomid)
+        if len(bucket) < 4:
+            print(f"Warning: Skipping bucket '{i}' - unexpected format (expected: index_epoch1_epoch2_randomid)")
+            continue
+        try:
+            newest_bucket_epoch_time = int(bucket[1])
+            oldest_bucket_epoch_time = int(bucket[2])
+        except (ValueError, IndexError) as e:
+            print(f"Warning: Skipping bucket '{i}' - invalid epoch time format: {e}")
+            continue
         if (newest_bucket_epoch_time >= oldest_epoch_time and oldest_bucket_epoch_time <= newest_epoch_time):
             buckets_found.append(i)
     print("---------------------------")
@@ -97,8 +119,20 @@ def check_data_integrity(source_path, buckets_found, splunk_home):
         intregrity_result = subprocess.check_output(["{}/bin/splunk {} -bucketPath {}".format(splunk_home, "check-integrity", bucket_path)], shell = True, stderr=subprocess.STDOUT, universal_newlines = True)
         print(intregrity_result)
         match = re.findall('succeeded=(\d),\sfailed=(\d)', intregrity_result)
-        fail = int(match[0][1])
-        success = int(match[0][0])
+        
+        # Check if regex found a match
+        if not match:
+            print(f"Warning: Could not parse integrity result for bucket '{bucket}'. Adding to failed list.")
+            buckets_failed_integrity.append(bucket)
+            continue
+            
+        try:
+            fail = int(match[0][1])
+        except (ValueError, IndexError) as e:
+            print(f"Warning: Error parsing integrity result for bucket '{bucket}': {e}. Adding to failed list.")
+            buckets_failed_integrity.append(bucket)
+            continue
+            
         if fail == 1:
             buckets_failed_integrity.append(bucket)
             print("Integrity check has failed for the bucket:", bucket)
@@ -178,11 +212,11 @@ def rebuild_buckets(buckets_found, dest_path, dest_index, splunk_home):
     subprocess.run(["cd","{}".format((splunk_home + "/bin") or ("/opt/splunk/bin"))], stdout=subprocess.PIPE)
     for bucket in buckets_found:
         try:
-            rebuild_result = subprocess.check_output(["{}/bin/splunk rebuild {}{} {}".format(splunk_home, dest_path, bucket, dest_index)], shell = True, universal_newlines = True)
+            subprocess.check_output(["{}/bin/splunk rebuild {}{} {}".format(splunk_home, dest_path, bucket, dest_index)], shell = True, universal_newlines = True)
             buckets_passed.append(bucket)
-        except:
+        except subprocess.CalledProcessError as e:
+            print(f"Error rebuilding bucket '{bucket}': {e}")
             buckets_failed.append(bucket)
-            pass
     os.chdir(path)
     print("Buckets are rebuilt...")
     print("---------------------------")
