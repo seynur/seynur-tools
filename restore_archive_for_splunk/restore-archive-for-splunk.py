@@ -143,7 +143,7 @@ def check_data_integrity(source_path, buckets_found, splunk_home):
         bucket_path = source_path + bucket
         intregrity_result = subprocess.check_output(["{}/bin/splunk {} -bucketPath {}".format(splunk_home, "check-integrity", bucket_path)], shell = True, stderr=subprocess.STDOUT, universal_newlines = True)
         print(intregrity_result)
-        match = re.findall('succeeded=(\d),\sfailed=(\d)', intregrity_result)
+        match = re.findall(r'succeeded=(\d),\sfailed=(\d)', intregrity_result)
         
         # Check if regex found a match
         if not match:
