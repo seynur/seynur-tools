@@ -28,34 +28,36 @@ usage: restore-archive-for-splunk.py [-h] [-f FROZENDB] [-t THAWEDDB] [-i INDEX]
 
 optional arguments:
 
-  -h, --help            show this help message and exit
+  -h, --help                    show this help message and exit
 
-  --restart_splunk      Splunk needs to be restarted to complete the rebuilding process
+  --restart_splunk              Splunk needs to be restarted to complete the rebuilding process
 
-  --check_integrity     Checks the integrity of buckets to be rebuild
+  --check_integrity             Checks the integrity of buckets to be rebuild
 
-  --version             show program's version number and exit
+  --version                     show program's version number and exit
+
+  -t, --thaweddb                The path where the frozen buckets are moved to rebuild
+
+  -i, --index                   The index name where the buckets are rebuilt
+
+  -o, --oldest_time             The starting date of the logs to be returned from the archive
+
+  -n, --newest_time             The end date of logs to be returned from the archive
+
+  -s, --splunk_home             Splunk home path
+
+  -s3, --s3_path                The path where the frozen buckets are located in the S3
+
+  -s3b, --s3_default_bucket     Default S3 bucket name
+
+
 
 arguments:
 
   -f FROZENDB, --frozendb FROZENDB
                         Frozendb path where the frozen buckets are
 
-  -t THAWEDDB, --thaweddb THAWEDDB
-                        The path where the frozen buckets are moved to rebuild
-
-  -i INDEX, --index INDEX
-                        The index name where the buckets are rebuilt
-
-  -o OLDEST_TIME, --oldest_time OLDEST_TIME
-                        The starting date of the logs to be returned from the archive
-
-  -n NEWEST_TIME, --newest_time NEWEST_TIME
-                        The end date of logs to be returned from the archive
-
-  -s SPLUNK_HOME, --splunk_home SPLUNK_HOME
-                        Splunk home path
-
+### Restore Archive 
 
 ```bash
 python3 splunk_restore_archive.py  -f "/opt/splunk/var/lib/splunk/wineventlog/frozendb/" -t "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
@@ -77,11 +79,39 @@ python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineve
 --index="archive_wineventlog" --oldest_time="2021-03-13 00:00:00" --newest_time="2021-03-16 00:00:00" --splunk_home="/opt/splunk" --restart_splunk
 ```
 
-You can use the command below to find out what are the oldest & earliest date times for the index.
+You can restore frozen buckets from S3 with the command below:
 
+```bash
+python3 restore-archive-for-splunk.py --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --thaweddb="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
+--index="archive_wineventlog" --oldest_time="2021-03-13 00:00:00" --newest_time="2021-03-16 00:00:00" --splunk_home="/opt/splunk" --s3_default_bucket="s3-frozen-test-bucket" --restart_splunk
+```
+
+You can restore frozen buckets from custom S3 with the command below:
+
+```bash
+python3 restore-archive-for-splunk.py --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --thaweddb="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
+--index="archive_wineventlog" --oldest_time="2021-03-13 00:00:00" --newest_time="2021-03-16 00:00:00" --splunk_home="/opt/splunk" --s3_path="http://localhost:4566" --s3_default_bucket="s3-frozen-test-bucket" --restart_splunk
+```
+
+### Oldest & Newest Datetime Finder
+You can use the command below to find out what are the oldest & newest date times for the index.
+
+On your local environmet:
 ```bash
 python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/"
 ```
+
+On S3 Repository: 
+```bash
+python3 splunk_restore_archive.py  --frozendb="/tmp/s3_archives/" --index="wineventlog" --s3_default_bucket="s3-frozen-test-bucket"
+```
+
+On Custom S3 Repository:
+
+```bash
+python3 splunk_restore_archive.py  --frozendb="/tmp/s3_archives/" --index="wineventlog" --s3_path="http://localhost:4566" --s3_default_bucket="s3-frozen-test-bucket"
+```
+
 
 ## Testing
 

@@ -6,7 +6,7 @@ import sys
 import argparse
 import re
 from datetime import datetime
-
+import json
 
 def handle_dates(oldest_time,newest_time):
     '''Returns start and end datetime in int.
@@ -69,7 +69,7 @@ def find_buckets(source_path, oldest_epoch_time, newest_epoch_time):
     return buckets_found
 
 
-def find_oldest_and_newest_bucket_dates(source_path, buckets_found):
+def find_oldest_and_newest_bucket_dates(buckets_found, source_path = "", index = ""):
     '''Returns the list oldest_and_newest_bucket_dates.
     Finds oldest and newest date of the buckets for specifix index.
 
@@ -84,14 +84,95 @@ def find_oldest_and_newest_bucket_dates(source_path, buckets_found):
     oldest_epoch_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(min(d[0] for d in bucket_dates)))
     newest_epoch_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(max(d[1] for d in bucket_dates)))
 
-    try:
-        source_path = source_path.split("/")[-1]
-    except:
-        source_path = source_path.split("\\")[-1]
+    if index != "":
+        try:
+            index = source_path.split("/")[-1]
+        except:
+            index = source_path.split("\\")[-1]
+    else:
+        pass
 
     print("---------------------------")
-    print("For \'{}\' index".format(source_path))
+    print("For \'{}\' index".format(index))
     print("oldest date : \'{}\' and newest date \'{}\'.\n".format(oldest_epoch_time, newest_epoch_time))
+
+def restore_buckets_from_s3(index, frozendb, oldest_epoch_time, newest_epoch_time, bucket_name, s3_endpoint = ""):
+    """
+    Lists objects in the given S3 bucket and downloads matching frozen buckets by epoch time range.
+
+    Keyword arguments:
+    s3_endpoint -- The --s3_path argument (e.g., http://localhost:4566), or "" for default AWS
+    frozendb -- Local frozendb destination path
+    oldest_epoch_time -- Start epoch time
+    newest_epoch_time -- End epoch time
+    bucket_name -- S3 bucket name 
+    """
+    print("---------------------------")
+
+    # Build the list-objects command
+    list_cmd = [
+        "aws", "s3api", "list-objects",
+        "--bucket", bucket_name,
+        "--query", "Contents[].{Key: Key, Size: Size}"
+    ]
+    print(s3_endpoint)
+    if s3_endpoint != "":
+        print("Listing and filtering S3 buckets from custom endpoint:", s3_endpoint)
+        list_cmd += ["--endpoint-url", s3_endpoint]
+    else:
+        print("Listing and filtering S3 buckets from default AWS endpoint...")
+
+    try:
+        result = subprocess.check_output(list_cmd, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        print(f"Error listing S3 buckets: {e.output}")
+        # return []
+        sys.exit(1)
+
+    try:
+        objects = json.loads(result)
+    except json.JSONDecodeError:
+        print("Failed to parse S3 list output.")
+        return []
+
+    matched_keys = []
+    for obj in objects:
+        key = obj["Key"]
+        if key[0:key.find("/")] == index:
+            match = re.search(r'db_(\d+)_(\d+)_\d+/rawdata/journal\.zst$', key)
+            if not match:
+                continue
+            start_epoch, end_epoch = int(match.group(1)), int(match.group(2))
+            if end_epoch >= oldest_epoch_time and start_epoch <= newest_epoch_time:
+                matched_keys.append(key)
+
+    print(f"Found {len(matched_keys)} matching bucket(s) in S3.")
+    
+    if oldest_epoch_time == 0:
+        matched_dbbucket_names = []
+        for key in matched_keys:
+            matched_dbbucket_names.append(key.split("/")[1])
+            
+        index = key.split("/")[0]
+        return index, matched_dbbucket_names
+    else:
+        # Download matched buckets
+        for key in matched_keys:
+            local_path = os.path.join(frozendb, os.path.dirname(key))
+            os.makedirs(local_path, exist_ok=True)
+            full_local_file_path = os.path.join(frozendb, key)
+            print(f"Downloading {key} to {full_local_file_path}")
+
+            get_cmd = [
+                "aws", "s3api", "get-object",
+                "--bucket", bucket_name,
+                "--key", key,
+                full_local_file_path
+            ]
+            if s3_endpoint:
+                get_cmd += ["--endpoint-url", s3_endpoint]
+
+            subprocess.run(get_cmd)
 
 
 
@@ -328,8 +409,8 @@ def archive_help():
     python3 splunk_restore_archive.py  -f="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" -t="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
     -i="archive_wineventlog" -o="2021-03-13 00:00:00" -n="2021-03-16 00:00:00" -s="/opt/splunk"  --check_integrity
 
-    python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --thaweddb="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
-    --index="archive_wineventlog" --oldest_time="2021-03-13 00:00:00" --newest_time="2021-03-16 00:00:00" --splunk_home="/opt/splunk" --restart_splunk
+    python3 splunk_restore_archive.py  --s3_path="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --thaweddb="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
+    --index="archive_wineventlog" --oldest_time="2021-03-13 00:00:00" --newest_time="2021-03-16 00:00:00" --splunk_home="/opt/splunk" --restart_splunk 
 
     for learning oldest-newest date, try below example:
     python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/"
@@ -346,6 +427,8 @@ def archive_help():
     parser.add_argument("--restart_splunk", action='store_const', const=restart_splunk, help="Splunk needs to be restarted to complete the rebuilding process")
     parser.add_argument("--check_integrity", action='store_const', const=check_data_integrity, help="Checks the integrity of buckets to be rebuild")
     parser.add_argument('--version', action='version', version='%(prog)s 1.0.0')
+    parser.add_argument("-s3", "--s3_path", type=str, help="The path where the frozen buckets are located in the S3")
+    parser.add_argument("-s3b", "--s3_default_bucket", type=str, help="Default S3 bucket name")
     args = parser.parse_args()
     return args
 
@@ -354,11 +437,20 @@ def main():
     args = archive_help()
     if args.newest_time and args.oldest_time:
         oldest_epoch_time, newest_epoch_time = handle_dates(args.oldest_time, args.newest_time)
-        buckets_found = find_buckets(args.frozendb, oldest_epoch_time, newest_epoch_time)
-        if args.check_integrity:
+
+        if args.check_integrity and not args.s3_path:
             buckets_found, buckets_failed_integrity, buckets_passed_integrity, buckets_not_checked_integrity = check_data_integrity(args.frozendb, buckets_found, args.splunk_home)
             log_data_integrity(buckets_not_checked_integrity, buckets_failed_integrity, buckets_passed_integrity, args.splunk_home)
-        copy_buckets(args.frozendb, args.thaweddb, buckets_found)
+
+        if args.s3_default_bucket:
+            args.s3_path = args.s3_path if args.s3_path else ""
+            restore_buckets_from_s3(args.index, args.frozendb, oldest_epoch_time, newest_epoch_time, args.s3_default_bucket, args.s3_path)
+            frozendb = args.frozendb + args.index + "/"
+            buckets_found = find_buckets(frozendb, oldest_epoch_time, newest_epoch_time)      
+            copy_buckets(frozendb, args.thaweddb, buckets_found)
+        else:
+            buckets_found = find_buckets(args.frozendb, oldest_epoch_time, newest_epoch_time)      
+            copy_buckets(args.frozendb, args.thaweddb, buckets_found)
         buckets_passed, buckets_failed = rebuild_buckets(buckets_found, args.thaweddb, args.index, args.splunk_home)
         log_rebuilt_results(buckets_passed, buckets_failed, args.splunk_home)
         if args.restart_splunk:
@@ -366,9 +458,15 @@ def main():
 
     else:
         newest_epoch_time = int(time.time())
-        buckets_found = find_buckets(args.frozendb, 0, newest_epoch_time)
-        print(buckets_found)
-        buckets_found = find_oldest_and_newest_bucket_dates(args.frozendb, buckets_found)
+        if args.s3_default_bucket:
+            args.s3_path = args.s3_path if args.s3_path else ""
+            index, buckets_found = restore_buckets_from_s3(args.index, args.frozendb, 0, newest_epoch_time, args.s3_default_bucket, args.s3_path)
+            print(buckets_found)
+            buckets_found = find_oldest_and_newest_bucket_dates(buckets_found, index = index)
+        else:
+            buckets_found = find_buckets(args.frozendb, 0, newest_epoch_time)
+            print(buckets_found)
+            buckets_found = find_oldest_and_newest_bucket_dates(buckets_found, source_path = args.frozendb)
 
 
 if __name__ == "__main__":
