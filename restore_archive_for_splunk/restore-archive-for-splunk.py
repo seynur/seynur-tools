@@ -8,8 +8,6 @@ import re
 from datetime import datetime
 
 
-
-
 def handle_dates(oldest_time,newest_time):
     '''Returns start and end datetime in int.
     Converts datetime to epoch to find correct buckets.
@@ -35,6 +33,7 @@ def handle_dates(oldest_time,newest_time):
     oldest_epoch_time = epoch_time[0]
     newest_epoch_time = epoch_time[1]
     return oldest_epoch_time, newest_epoch_time
+
 
 def find_buckets(source_path, oldest_epoch_time, newest_epoch_time):
     '''Returns the list buckets_found.
@@ -68,6 +67,32 @@ def find_buckets(source_path, oldest_epoch_time, newest_epoch_time):
     print("---------------------------")
     print("The number of buckets found: {}.".format(len(buckets_found)))
     return buckets_found
+
+
+def find_oldest_and_newest_bucket_dates(source_path, buckets_found):
+    '''Returns the list oldest_and_newest_bucket_dates.
+    Finds oldest and newest date of the buckets for specifix index.
+
+    Keyword arguments:
+    source_path -- archive path (frozendb)
+    buckets_found -- buckets found
+    oldest_epoch_time -- oldest date (epoch) 
+    newest_epoch_time -- newest date (epoch)
+    '''    
+
+    bucket_dates = [tuple(map(int, bucket.split("_")[1:3])) for bucket in buckets_found]
+    oldest_epoch_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(min(d[0] for d in bucket_dates)))
+    newest_epoch_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(max(d[1] for d in bucket_dates)))
+
+    try:
+        source_path = source_path.split("/")[-1]
+    except:
+        source_path = source_path.split("\\")[-1]
+
+    print("---------------------------")
+    print("For \'{}\' index".format(source_path))
+    print("oldest date : \'{}\' and newest date \'{}\'.\n".format(oldest_epoch_time, newest_epoch_time))
+
 
 
 def copy_buckets(source_path, dest_path,buckets_found):
@@ -196,6 +221,7 @@ def log_data_integrity(buckets_not_checked_integrity, buckets_failed_integrity, 
     os.chdir(path)
     return None
 
+
 def rebuild_buckets(buckets_found, dest_path, dest_index, splunk_home):
     '''Returns failed and passed buckets.
     Rebuilds the buckets one by one in the destination path (thaweddb).
@@ -225,6 +251,7 @@ def rebuild_buckets(buckets_found, dest_path, dest_index, splunk_home):
     print("The number of buckets that failed to rebuild:", len(buckets_failed))
     print("---------------------------")
     return buckets_passed, buckets_failed
+
 
 def log_rebuilt_results(buckets_passed, buckets_failed, splunk_home):
     '''Returns None.
@@ -276,6 +303,7 @@ def restart_splunk(splunk_home):
     print(restart_result)
     return None
 
+
 def archive_help():
     '''Returns None.
     The argparse module also automatically generates help and usage.
@@ -302,16 +330,19 @@ def archive_help():
 
     python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --thaweddb="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
     --index="archive_wineventlog" --oldest_time="2021-03-13 00:00:00" --newest_time="2021-03-16 00:00:00" --splunk_home="/opt/splunk" --restart_splunk
+
+    for learning oldest-newest date, try below example:
+    python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/"
     '''
 
     parser = argparse.ArgumentParser(epilog=example_text, formatter_class=argparse.RawDescriptionHelpFormatter)
     required_args = parser.add_argument_group("arguments")
     required_args.add_argument("-f","--frozendb", type=str, help="Frozendb path where the frozen buckets are")
-    required_args.add_argument("-t", "--thaweddb", type=str, help="The path where the frozen buckets are moved to rebuild")
-    required_args.add_argument("-i", "--index", type=str, help="The index name where the buckets are rebuilt")
-    required_args.add_argument("-o", "--oldest_time", type=str, help="The oldest date of the logs to be returned from the archive")
-    required_args.add_argument("-n", "--newest_time", type=str, help="The newest date of logs to be returned from the archive")
-    required_args.add_argument("-s", "--splunk_home", type=str,help="Splunk home path")
+    parser.add_argument("-t", "--thaweddb", type=str, help="The path where the frozen buckets are moved to rebuild")
+    parser.add_argument("-i", "--index", type=str, help="The index name where the buckets are rebuilt")
+    parser.add_argument("-o", "--oldest_time", type=str, help="The oldest date of the logs to be returned from the archive")
+    parser.add_argument("-n", "--newest_time", type=str, help="The newest date of logs to be returned from the archive")
+    parser.add_argument("-s", "--splunk_home", type=str,help="Splunk home path")
     parser.add_argument("--restart_splunk", action='store_const', const=restart_splunk, help="Splunk needs to be restarted to complete the rebuilding process")
     parser.add_argument("--check_integrity", action='store_const', const=check_data_integrity, help="Checks the integrity of buckets to be rebuild")
     parser.add_argument('--version', action='version', version='%(prog)s 1.0.0')
@@ -321,16 +352,24 @@ def archive_help():
 
 def main():
     args = archive_help()
-    oldest_epoch_time, newest_epoch_time = handle_dates(args.oldest_time, args.newest_time)
-    buckets_found = find_buckets(args.frozendb, oldest_epoch_time, newest_epoch_time)
-    if args.check_integrity:
-        buckets_found, buckets_failed_integrity, buckets_passed_integrity, buckets_not_checked_integrity = check_data_integrity(args.frozendb, buckets_found, args.splunk_home)
-        log_data_integrity(buckets_not_checked_integrity, buckets_failed_integrity, buckets_passed_integrity, args.splunk_home)
-    copy_buckets(args.frozendb, args.thaweddb, buckets_found)
-    buckets_passed, buckets_failed = rebuild_buckets(buckets_found, args.thaweddb, args.index, args.splunk_home)
-    log_rebuilt_results(buckets_passed, buckets_failed, args.splunk_home)
-    if args.restart_splunk:
-        restart_splunk(args.splunk_home)
+    if args.newest_time and args.oldest_time:
+        oldest_epoch_time, newest_epoch_time = handle_dates(args.oldest_time, args.newest_time)
+        buckets_found = find_buckets(args.frozendb, oldest_epoch_time, newest_epoch_time)
+        if args.check_integrity:
+            buckets_found, buckets_failed_integrity, buckets_passed_integrity, buckets_not_checked_integrity = check_data_integrity(args.frozendb, buckets_found, args.splunk_home)
+            log_data_integrity(buckets_not_checked_integrity, buckets_failed_integrity, buckets_passed_integrity, args.splunk_home)
+        copy_buckets(args.frozendb, args.thaweddb, buckets_found)
+        buckets_passed, buckets_failed = rebuild_buckets(buckets_found, args.thaweddb, args.index, args.splunk_home)
+        log_rebuilt_results(buckets_passed, buckets_failed, args.splunk_home)
+        if args.restart_splunk:
+            restart_splunk(args.splunk_home)
+
+    else:
+        newest_epoch_time = int(time.time())
+        buckets_found = find_buckets(args.frozendb, 0, newest_epoch_time)
+        print(buckets_found)
+        buckets_found = find_oldest_and_newest_bucket_dates(args.frozendb, buckets_found)
+
 
 if __name__ == "__main__":
     main()

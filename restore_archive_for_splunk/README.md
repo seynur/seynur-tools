@@ -77,6 +77,12 @@ python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineve
 --index="archive_wineventlog" --oldest_time="2021-03-13 00:00:00" --newest_time="2021-03-16 00:00:00" --splunk_home="/opt/splunk" --restart_splunk
 ```
 
+You can use the command below to find out what are the oldest & earliest date times for the index.
+
+```bash
+python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/"
+```
+
 ## Testing
 
 The project includes a comprehensive test suite to verify bucket parsing and validation logic. All test files are organized in the `test/` subfolder.
