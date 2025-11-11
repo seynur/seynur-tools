@@ -22,13 +22,14 @@ You can create "logs" folder under your current directory or the logs will be wr
 **python3 restore-archive-for-splunk.py --help**
 
 
-usage: restore-archive-for-splunk.py [-h] [-f FROZENDB] [-t THAWEDDB] [-i INDEX]
-                                     [-o OLDEST_TIME] [-n NEWEST_TIME] [-s SPLUNK_HOME]
-                                     [--restart_splunk] [--check_integrity] [--version]
+usage: restore-archive-for-splunk.py [-h --help] [-f --frozendb] [-t --thaweddb] [-i --index]
+                                     [-o --oldest_time] [-n --newest_time] [-s --splunk_home] [-s3 --s3_path] [-s3b --s3_default_bucket] [--restart_splunk] [--check_integrity] [--version] 
 
 optional arguments:
 
   -h, --help                    show this help message and exit
+
+  -f , --frozendb               Frozendb path where the frozen buckets are
 
   --restart_splunk              Splunk needs to be restarted to complete the rebuilding process
 
@@ -50,12 +51,6 @@ optional arguments:
 
   -s3b, --s3_default_bucket     Default S3 bucket name
 
-
-
-arguments:
-
-  -f FROZENDB, --frozendb FROZENDB
-                        Frozendb path where the frozen buckets are
 
 ### Restore Archive 
 
@@ -103,33 +98,17 @@ python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineve
 
 On S3 Repository: 
 ```bash
-python3 splunk_restore_archive.py  --frozendb="/tmp/s3_archives/" --index="wineventlog" --s3_default_bucket="s3-frozen-test-bucket"
+python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/"--index="wineventlog" --s3_default_bucket="s3-frozen-test-bucket"
 ```
 
 On Custom S3 Repository:
 
 ```bash
-python3 splunk_restore_archive.py  --frozendb="/tmp/s3_archives/" --index="wineventlog" --s3_path="http://localhost:4566" --s3_default_bucket="s3-frozen-test-bucket"
+python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --index="wineventlog" --s3_path="http://localhost:4566" --s3_default_bucket="s3-frozen-test-bucket"
 ```
 
-
-## Testing
-
-The project includes a comprehensive test suite to verify bucket parsing and validation logic. All test files are organized in the `test/` subfolder.
-
-### Running Tests
+### Optional: Program version finder
 
 ```bash
-cd test/
-
-# Run all tests
-python3 run_tests.py --all
-
-# Run only unit tests
-python3 run_tests.py --unit-tests
-
-# Create test data
-python3 run_tests.py --create-data
+python3 restore-archive-for-splunk.py  --version
 ```
-
-For detailed testing documentation, see `test/README.md` and `TEST_STRUCTURE.md`.
