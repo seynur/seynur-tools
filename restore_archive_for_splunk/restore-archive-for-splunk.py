@@ -303,14 +303,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-#     python3 /Users/oyku/dev/github/seynur/restore-archive-for-splunk/restore-archive-for-splunk.py /splunk_restore_archive_merged.py --frozendb="/Users/oyku/dev/github/seynur/restore-archive-for-splunk/restore-archive-for-splunk.py /lolo_s3/" --thaweddb="/Users/oyku/dev/github/seynur/restore-archive-for-splunk/restore-archive-for-splunk.py /lolo_tha/"
-# --index="oyku_test" --oldest_time="2021-03-13 00:00:00" --newest_time="2025-11-12 00:00:00" --splunk_home="/Users/oyku/dev/splunk/splunks/splunk_9-3-2/splunk_20250515" --s3_default_bucket="s3-frozen-test-bucket"  --s3_path="http://localhost:4566"
-
-
-# python3 /Users/oyku/dev/github/seynur/restore-archive-for-splunk/restore-archive-for-splunk.py /splunk_restore_archive_merged.py --frozendb="/Users/oyku/dev/github/seynur/restore-archive-for-splunk/restore-archive-for-splunk.py /lolo_s3/" --index="oyku_test" --s3_default_bucket="s3-frozen-test-bucket" --s3_path="http://localhost:4566"
-
-
-# python3 /Users/oyku/dev/github/seynur/restore-archive-for-splunk/restore-archive-for-splunk.py /restore-archive-for-splunk.py --frozendb="/Users/oyku/dev/github/seynur/restore-archive-for-splunk/restore-archive-for-splunk.py /lolo_s3/" --index="oyku_test" --s3_default_bucket="s3-frozen-test-bucket" --s3_path="http://localhost:4566"
