@@ -7,11 +7,7 @@ restore_archive_for_splunk/
 ├── restore-archive-for-splunk.py    # Main script
 ├── README.md                        # Main documentation
 ├── LICENSE                          # License file
-└── test/                           # Test subfolder
-    ├── test_bucket_parsing.py      # Unit tests
-    ├── create_test_data.py         # Test data generator
-    ├── run_tests.py                # Test runner
-    └── README.md                   # Detailed test documentation
+
 ```
 
 
@@ -39,7 +35,7 @@ optional arguments:
 
   -t, --thaweddb                The path where the frozen buckets are moved to rebuild
 
-  -i, --index                   The index name where the buckets are rebuilt
+  -i, --index                   The index name where the buckets are rebuilt from the archive
 
   -o, --oldest_time             The starting date of the logs to be returned from the archive
 
@@ -55,37 +51,77 @@ optional arguments:
 ### Restore Archive 
 
 ```bash
-python3 splunk_restore_archive.py  -f "/opt/splunk/var/lib/splunk/wineventlog/frozendb/" -t "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
-  -i "archive_wineventlog" -o "2021-03-13 00:00:00" -n "2021-03-16 00:00:00" -s "/opt/splunk" --restart_splunk --check_integrity
+
+python3 restore-archive-for-splunk.py \
+  -f "/frozen_archive" \
+  -t "/Users/hilal/dev/splunk/var/lib/splunk/archive_wineventlog/thaweddb/" \
+  -i "wineventlog" \
+  -o "2021-03-13 00:00:00" \
+  -n "2021-03-16 00:00:00" \
+  -s "/opt/splunk" \
+  --restart_splunk \
+  --check_integrity
 ```
 
 ```bash
-python3 splunk_restore_archive.py  --frozendb "/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --thaweddb "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
---index "archive_wineventlog" --oldest_time "2021-03-13 00:00:00" --newest_time "2021-03-16 00:00:00" --splunk_home "/opt/splunk"
+python3 restore-archive-for-splunk.py \
+  --frozendb "/frozen_archive" \
+  --thaweddb "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/" \
+  --index "wineventlog" \
+  --oldest_time "2021-03-13 00:00:00" \
+  --newest_time "2021-03-16 00:00:00" \
+  --splunk_home "/opt/splunk"
 ```
 
 ```bash
-python3 splunk_restore_archive.py  -f="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" -t="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
--i="archive_wineventlog" -o="2021-03-13 00:00:00" -n="2021-03-16 00:00:00" -s="/opt/splunk"  --check_integrity
+python3 restore-archive-for-splunk.py \
+  -f="/frozen_archive" \
+  -t="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/" \
+  -i="wineventlog" \
+  -o="2021-03-13 00:00:00" \
+  -n="2021-03-16 00:00:00" \
+  -s="/opt/splunk" \
+  --check_integrity
 ```
 
 ```bash
-python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --thaweddb="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
---index="archive_wineventlog" --oldest_time="2021-03-13 00:00:00" --newest_time="2021-03-16 00:00:00" --splunk_home="/opt/splunk" --restart_splunk
+python3 restore-archive-for-splunk.py \
+  --frozendb="/frozen_archive" \
+  --thaweddb="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/" \
+  --index="wineventlog" \
+  --oldest_time="2021-03-13 00:00:00" \
+  --newest_time="2021-03-16 00:00:00" \
+  --splunk_home="/opt/splunk" \
+  --restart_splunk
 ```
 
 You can restore frozen buckets from S3 with the command below:
 
 ```bash
-python3 restore-archive-for-splunk.py --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --thaweddb="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
---index="archive_wineventlog" --oldest_time="2021-03-13 00:00:00" --newest_time="2021-03-16 00:00:00" --splunk_home="/opt/splunk" --s3_default_bucket="s3-frozen-test-bucket" --restart_splunk
+python3 restore-archive-for-splunk.py \
+  --frozendb="/frozen_archive" \
+  --thaweddb="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/" \
+  --index="wineventlog" \
+  --oldest_time="2021-03-13 00:00:00" \
+  --newest_time="2021-03-16 00:00:00" \
+  --splunk_home="/opt/splunk" \
+  --s3_default_bucket="s3-frozen-test-bucket" \
+  --restart_splunk
 ```
 
 You can restore frozen buckets from custom S3 with the command below:
 
 ```bash
-python3 restore-archive-for-splunk.py --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --thaweddb="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/"
---index="archive_wineventlog" --oldest_time="2021-03-13 00:00:00" --newest_time="2021-03-16 00:00:00" --splunk_home="/opt/splunk" --s3_path="http://localhost:4566" --s3_default_bucket="s3-frozen-test-bucket" --restart_splunk
+python3 restore-archive-for-splunk.py \
+  --frozendb="/frozen_archive" \
+  --thaweddb="/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/" \
+  --index="wineventlog" \
+  --oldest_time="2021-03-13 00:00:00" \
+  --newest_time="2021-03-16 00:00:00" \
+  --splunk_home="/opt/splunk" \
+  --s3_path="http://localhost:4566" \
+  --s3_default_bucket="s3-frozen-test-bucket" \
+  --restart_splunk
 ```
 
 ### Oldest & Newest Datetime Finder
@@ -93,22 +129,27 @@ You can use the command below to find out what are the oldest & newest date time
 
 On your local environmet:
 ```bash
-python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/"
+python3 restore-archive-for-splunk.py --frozendb="/frozen_archive"
 ```
 
 On S3 Repository: 
 ```bash
-python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/"--index="wineventlog" --s3_default_bucket="s3-frozen-test-bucket"
+python3 restore-archive-for-splunk.py \
+  --index="wineventlog" \
+  --s3_default_bucket="s3-frozen-test-bucket"
 ```
 
 On Custom S3 Repository:
 
 ```bash
-python3 splunk_restore_archive.py  --frozendb="/opt/splunk/var/lib/splunk/wineventlog/frozendb/" --index="wineventlog" --s3_path="http://localhost:4566" --s3_default_bucket="s3-frozen-test-bucket"
+python3 restore-archive-for-splunk.py \
+  --index="wineventlog" \
+  --s3_path="http://localhost:4566" \
+  --s3_default_bucket="s3-frozen-test-bucket"
 ```
 
-### Optional: Program version finder
+### Optional: Program version finder
 
 ```bash
-python3 restore-archive-for-splunk.py  --version
+python3 restore-archive-for-splunk.py --version
 ```
