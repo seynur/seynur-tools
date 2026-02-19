@@ -15,6 +15,7 @@ For correlation search stanzas (`action.correlationsearch`):
 - Adds `action.notable.param.rule_description` if missing.
 - Adds `action.notable.param.investigation_type = default` if missing.
 - Adds `action.risk.param._risk_message` if missing.
+- Adds `action.risk.param.rule_title` if missing.
 - Replaces empty values for the fields above with generic values.
 
 Other stanzas are copied as-is.

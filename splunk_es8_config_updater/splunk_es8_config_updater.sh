@@ -86,6 +86,14 @@ function flush_stanza(   i, pos_inject, meaningful) {
       has_plain_desc=1
     }
 
+    # Overwrite notable rule_title if it exists but empty
+    if (lines[i] ~ /^[[:space:]]*action\.notable\.param\.rule_title[[:space:]]*=/) {
+      if (is_empty_value(lines[i])) {
+        lines[i] = "action.notable.param.rule_title = Generic Rule Title - " stanza_name
+      }
+      has_rule_title=1
+    }
+
     # Overwrite notable rule_description if it exists but empty
     if (lines[i] ~ /^[[:space:]]*action\.notable\.param\.rule_description[[:space:]]*=/) {
       if (is_empty_value(lines[i])) {
@@ -110,11 +118,17 @@ function flush_stanza(   i, pos_inject, meaningful) {
         print "description = Generic Desc - " stanza_name
     }
 
+
+
     # Inject other missing parameters after title/label/header (pos_inject)
     if (i == pos_inject) {
 
       if (!has_desc)
         print "action.notable.param.rule_description = Generic Rule Desc - " stanza_name
+
+      if (!has_rule_title)
+        print "action.notable.param.rule_title = Generic Rule Title - " stanza_name
+
       if (!has_invest)
         print "action.notable.param.investigation_type = default"
 
@@ -154,9 +168,17 @@ BEGIN { n=0; reset_flags() }
   if (line ~ /^[[:space:]]*description[[:space:]]*=/)
     has_plain_desc=1
 
+  # Track presence of plain description
+  if (line ~ /^[[:space:]]*description[[:space:]]*=/)
+    has_plain_desc=1
+
   # Track presence of notable rule_description
   if (line ~ /^[[:space:]]*action\.notable\.param\.rule_description[[:space:]]*=/)
     has_desc=1
+
+  # Track presence of notable rule_title
+  if (line ~ /^[[:space:]]*action\.notable\.param\.rule_title[[:space:]]*=/)
+    has_rule_title=1
 
   # Track presence of investigation_type
   if (line ~ /^[[:space:]]*action\.notable\.param\.investigation_type[[:space:]]*=/)
