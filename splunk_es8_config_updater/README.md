@@ -49,3 +49,55 @@ splunk_es8_config_updater.sh
 - Input should be a Splunk `.conf` file containing saved search stanzas.
 - The script writes a transformed file to `OUT`; it does not edit the source file in place.
 - Generic values are based on stanza name and are meant as migration placeholders.
+
+## Bonus
+Also, you can use the commands below to sum up all `etc/*/local/savedsearches.conf` files into one.
+
+1. To create the file that contains all searches without `savedsearches.conf` paths.
+
+`command`:
+```
+find $SPLUNK_HOME/etc -path "*/local/savedsearches.conf" -type f -exec cat {} \; > /tmp/merged_savedsearches.conf
+
+```
+
+`output`:
+```
+[Threat - Oyku-ES Upgrade Test - Rule]
+action.correlationsearch.enabled = 1
+action.correlationsearch.label = Threat - Oyku-ES Upgrade Test - Rule
+...
+
+[Threat - Oyku-ES Upgrade Test 2 - Rule]
+action.correlationsearch.enabled = 1
+action.correlationsearch.label = Threat - Oyku-ES Upgrade Test 2 - Rule
+...
+```
+
+
+2. To create the file that contains all searches with `savedsearches.conf` paths.
+
+`command`:
+```
+find $SPLUNK_HOME/etc -path "*/local/savedsearches.conf" -type f -exec sh -c '
+echo "### FILE: $1"
+cat "$1"
+echo ""
+' _ {} \; > /tmp/merged_savedsearches.conf
+
+```
+
+`output`:
+```
+### FILE: /opt/splunk/etc/apps/SplunkEnterpriseSecuritySuite/local/savedsearches.conf
+[Threat - Oyku-ES Upgrade Test - Rule]
+action.correlationsearch.enabled = 1
+action.correlationsearch.label = Threat - Oyku-ES Upgrade Test - Rule
+...
+
+### FILE: /opt/splunk/etc/apps/custom_usecase_app/local/savedsearches.conf
+[Threat - Oyku-ES Upgrade Test 2 - Rule]
+action.correlationsearch.enabled = 1
+action.correlationsearch.label = Threat - Oyku-ES Upgrade Test 2 - Rule
+...
+```
