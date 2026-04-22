@@ -54,7 +54,7 @@ optional arguments:
 
 python3 restore-archive-for-splunk.py \
   -f "/frozen_archive" \
-  -t "/Users/hilal/dev/splunk/var/lib/splunk/archive_wineventlog/thaweddb/" \
+  -t "/opt/splunk/var/lib/splunk/archive_wineventlog/thaweddb/" \
   -i "wineventlog" \
   -o "2021-03-13 00:00:00" \
   -n "2021-03-16 00:00:00" \
