@@ -160,3 +160,9 @@ your_splunk_app/
 ---
 
 Happy Archiving! 📦☁️
+
+
+
+curl -k https://localhost:8088/services/collector/event \
+  -H "Authorization: Splunk  2f12f4c9-d4ac-4037-8b7d-bafa7c7cdba7" \
+  -d '{"event": "Jun 16 16:10:00 11.11.11.112 16/06/2026:16:10:00 GMT monitor oyku test local", "index": "oyku_test_gcs", "sourcetype": "oyku:gcs:test"}'
