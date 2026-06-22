@@ -13,10 +13,24 @@ This folder contains two repositories intended to be published separately:
 
 ### Step 1: Download and configure splunk-deployment-config
 
-These templates live in the [seynur-tools](https://github.com/seynur/seynur-tools) monorepo under `ansible_splunk/`. Use [degit](https://github.com/Rich-Harris/degit) to fetch a subfolder (requires Node.js):
+These templates live in the [seynur-tools](https://github.com/seynur/seynur-tools) monorepo under `ansible_splunk/`. Download with [degit](https://github.com/Rich-Harris/degit) (recommended) or download ZIP from GitHub.
+
+Requires Node.js. If unavailable, download ZIP from:
+https://github.com/seynur/seynur-tools/archive/main.zip
+and extract `ansible_splunk/splunk-deployment-config/`
 
 ```bash
 npx degit seynur/seynur-tools/ansible_splunk/splunk-deployment-config splunk-deployment-config
+cd splunk-deployment-config
+git init
+git remote add origin https://github.com/your-org/your-splunk-config.git
+```
+
+Alternative: download ZIP from GitHub and extract:
+
+```bash
+# Download https://github.com/seynur/seynur-tools/archive/main.zip
+# Extract ansible_splunk/splunk-deployment-config/
 cd splunk-deployment-config
 git init
 git remote add origin https://github.com/your-org/your-splunk-config.git
@@ -39,6 +53,8 @@ git push -u origin main
 Required for splunk-ansible-ui **Apps** page (auto commit and push). Configure `user.name` and `user.email` on the machine that runs the UI.
 
 ### Step 3: Start splunk-ansible-ui
+
+Download with degit (recommended) or download ZIP from GitHub (extract `ansible_splunk/splunk-ansible-ui/` from [main.zip](https://github.com/seynur/seynur-tools/archive/main.zip)).
 
 ```bash
 npx degit seynur/seynur-tools/ansible_splunk/splunk-ansible-ui splunk-ansible-ui
@@ -107,4 +123,4 @@ docker compose exec backend ssh splunk@your-splunk-host
 - **splunk-ansible-ui/README.md** — Docker deployment, environment variables, Git and SSH setup
 - **splunk-deployment-config/README.md** — inventory, group_vars, CLI playbooks, UI integration
 
-Download each template with degit (see steps above) and point `splunk-deployment-config` at your own Git remote before customizing.
+Download each template with degit or ZIP (see steps above) and point `splunk-deployment-config` at your own Git remote before customizing.

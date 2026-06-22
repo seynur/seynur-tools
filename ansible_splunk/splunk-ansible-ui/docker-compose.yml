@@ -8,10 +8,13 @@ services:
     environment:
       DEPLOYMENT_ROOT: /deployment
       SPLUNKAPPS_PATH: /deployment/apps
+      # - GIT_AUTHOR_NAME=Splunk Ops
+      # - GIT_AUTHOR_EMAIL=ops@example.com
     volumes:
-      - ./backend:/app
       - ${DEPLOYMENT_ROOT}:/deployment:ro
       - backend-data:/app/data
+      # Uncomment to mount SSH keys for Ansible:
+      # - ~/.ssh:/root/.ssh:ro
 
   frontend:
     build: ./frontend

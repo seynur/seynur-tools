@@ -27,11 +27,21 @@ Complete **splunk-deployment-config** setup (including Git remote) before starti
 
 ### 1. Download both repositories
 
-These templates live in the [seynur-tools](https://github.com/seynur/seynur-tools) monorepo under `ansible_splunk/`. Use [degit](https://github.com/Rich-Harris/degit) to fetch each subfolder (requires Node.js):
+These templates live in the [seynur-tools](https://github.com/seynur/seynur-tools) monorepo under `ansible_splunk/`. Download with [degit](https://github.com/Rich-Harris/degit) (recommended) or download ZIP from GitHub.
 
 ```bash
 npx degit seynur/seynur-tools/ansible_splunk/splunk-ansible-ui splunk-ansible-ui
 npx degit seynur/seynur-tools/ansible_splunk/splunk-deployment-config splunk-deployment-config
+cd splunk-deployment-config
+git init
+git remote add origin https://github.com/your-org/your-splunk-config.git
+```
+
+Alternative: download ZIP from GitHub and extract:
+
+```bash
+# Download https://github.com/seynur/seynur-tools/archive/main.zip
+# Extract ansible_splunk/splunk-ansible-ui/ and ansible_splunk/splunk-deployment-config/
 cd splunk-deployment-config
 git init
 git remote add origin https://github.com/your-org/your-splunk-config.git
@@ -108,6 +118,8 @@ The **Apps** page commits and pushes changes to `splunk-deployment-config`. The 
 
 2. Have `user.name` and `user.email` configured for commits
 3. Have push access to that remote
+
+The backend container needs Git author config for Apps Manager commit/push. Add to `docker-compose.yml` `environment` section (see commented examples in the file).
 
 If the remote is not configured or push fails, app changes are written locally but not published to your remote.
 

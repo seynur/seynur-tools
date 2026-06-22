@@ -45,14 +45,26 @@ This repository is **configuration and playbooks only**. Pair it with **splunk-a
 
 ## Getting started
 
-**This repository is a template.** On GitHub, click **Use this template** → **Create a new repository** to create your own copy without needing to change the remote manually.
+Download with [degit](https://github.com/Rich-Harris/degit) (recommended) or download ZIP from GitHub. These templates live in the [seynur-tools](https://github.com/seynur/seynur-tools) monorepo under `ansible_splunk/` (not a standalone template repository).
 
-For CLI users, download the template from the [seynur-tools](https://github.com/seynur/seynur-tools) monorepo with [degit](https://github.com/Rich-Harris/degit) (requires Node.js; degit does not include a `.git` directory).
+Requires Node.js. If unavailable, download ZIP from:
+https://github.com/seynur/seynur-tools/archive/main.zip
+and extract `ansible_splunk/splunk-deployment-config/`
 
 ### 1. Download the template and point at your repository
 
 ```bash
 npx degit seynur/seynur-tools/ansible_splunk/splunk-deployment-config splunk-deployment-config
+cd splunk-deployment-config
+git init
+git remote add origin https://github.com/your-org/your-splunk-config.git
+```
+
+Alternative: download ZIP from GitHub and extract:
+
+```bash
+# Download https://github.com/seynur/seynur-tools/archive/main.zip
+# Extract ansible_splunk/splunk-deployment-config/
 cd splunk-deployment-config
 git init
 git remote add origin https://github.com/your-org/your-splunk-config.git
