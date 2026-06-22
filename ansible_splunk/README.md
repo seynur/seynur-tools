@@ -11,12 +11,15 @@ This folder contains two repositories intended to be published separately:
 
 ## End-to-end getting started
 
-### Step 1: Clone and configure splunk-deployment-config
+### Step 1: Download and configure splunk-deployment-config
+
+These templates live in the [seynur-tools](https://github.com/seynur/seynur-tools) monorepo under `ansible_splunk/`. Use [degit](https://github.com/Rich-Harris/degit) to fetch a subfolder (requires Node.js):
 
 ```bash
-git clone <splunk-deployment-config-template-url> splunk-deployment-config
+npx degit seynur/seynur-tools/ansible_splunk/splunk-deployment-config splunk-deployment-config
 cd splunk-deployment-config
-git remote set-url origin https://github.com/your-org/your-splunk-config.git
+git init
+git remote add origin https://github.com/your-org/your-splunk-config.git
 ```
 
 1. Add Splunk app directories under `apps/` (one folder per app).
@@ -38,7 +41,7 @@ Required for splunk-ansible-ui **Apps** page (auto commit and push). Configure `
 ### Step 3: Start splunk-ansible-ui
 
 ```bash
-git clone <splunk-ansible-ui-url> splunk-ansible-ui
+npx degit seynur/seynur-tools/ansible_splunk/splunk-ansible-ui splunk-ansible-ui
 cd splunk-ansible-ui
 cp .env.example .env
 # Edit DEPLOYMENT_ROOT to the host path of your splunk-deployment-config checkout
@@ -104,4 +107,4 @@ docker compose exec backend ssh splunk@your-splunk-host
 - **splunk-ansible-ui/README.md** — Docker deployment, environment variables, Git and SSH setup
 - **splunk-deployment-config/README.md** — inventory, group_vars, CLI playbooks, UI integration
 
-Clone each repository from the published template URLs and point `splunk-deployment-config` at your own remote before customizing.
+Download each template with degit (see steps above) and point `splunk-deployment-config` at your own Git remote before customizing.

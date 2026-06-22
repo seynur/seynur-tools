@@ -43,13 +43,19 @@ This repository is **configuration and playbooks only**. Pair it with **splunk-a
 
 ---
 
-## Setup
+## Getting started
 
-### 1. Clone and customize
+**This repository is a template.** On GitHub, click **Use this template** → **Create a new repository** to create your own copy without needing to change the remote manually.
+
+For CLI users, download the template from the [seynur-tools](https://github.com/seynur/seynur-tools) monorepo with [degit](https://github.com/Rich-Harris/degit) (requires Node.js; degit does not include a `.git` directory).
+
+### 1. Download the template and point at your repository
 
 ```bash
-git clone <splunk-deployment-config-url> splunk-deployment-config
+npx degit seynur/seynur-tools/ansible_splunk/splunk-deployment-config splunk-deployment-config
 cd splunk-deployment-config
+git init
+git remote add origin https://github.com/your-org/your-splunk-config.git
 ```
 
 ### 2. Add Splunk apps
@@ -127,15 +133,13 @@ splunk_apps_to_remove:
 git_splunkapps_path: "{{ lookup('env', 'SPLUNKAPPS_PATH') | default(playbook_dir + '/../apps', true) }}"
 ```
 
-### 6. Git remote setup (required for UI)
+### 6. Push your configuration
 
-splunk-ansible-ui **Apps** commits and pushes changes to this repository. After customizing inventory and `group_vars`:
+After adding apps and editing inventory and `group_vars`:
 
 ```bash
-git init
 git add .
-git commit -m "Initial deployment configuration"
-git remote add origin <your-git-remote-url>
+git commit -m "Initial customer configuration"
 git push -u origin main
 ```
 
@@ -146,12 +150,14 @@ git config user.email "ops@example.com"
 git config user.name "Splunk Ops"
 ```
 
+splunk-ansible-ui **Apps** commits and pushes to this repository. Your remote must be set (see step 1) with push access.
+
 ---
 
 ## splunk-ansible-ui integration
 
-1. Complete inventory, `group_vars`, and `apps/` setup in this repo.
-2. Initialize Git and configure a push remote (see above).
+1. Download the template with degit, set your Git remote, and complete inventory, `group_vars`, and `apps/` setup in this repo.
+2. Push your initial configuration to your remote (see above).
 3. On the UI host, set `DEPLOYMENT_ROOT` in splunk-ansible-ui `.env` to the **host path** of this checkout.
 4. Start splunk-ansible-ui with Docker Compose (`docker compose up --build`).
 5. Open http://localhost:
