@@ -1,0 +1,17 @@
+[standalone]
+# TODO: standalone search head hostname or IP
+
+[shdeployer]
+# TODO: SHC deployer hostname or IP
+
+[clustermanager]
+# TODO: cluster manager hostname or IP
+
+[deploymentserver]
+# TODO: deployment server hostname or IP
+
+[sc4s_forwarder]
+# TODO: SC4S forwarder hostname or IP
+
+[git_client]
+localhost ansible_connection=local

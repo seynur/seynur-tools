@@ -1,0 +1,18 @@
+---
+# ###############################################################
+#   _____    _____   _  _      _____
+#  / ____|  / ____| | || |    / ____|
+# | (___   | |      | || |_  | (___
+#  \___ \  | |      |__   _|  \___ \
+#  ____) | | |____     | |    ____) |
+# |_____/   \_____|    |_|   |_____/
+# ###############################################################
+
+- hosts: sc4s_forwarder
+  vars:
+    splunk_dest: "{{ sc4s_splunk_dest }}"
+    app_staging_dir: "/tmp/splunk-app-staging/{{ inventory_hostname }}"
+    deploy_become_user: root
+
+  tasks:
+    - ansible.builtin.include_tasks: tasks/deploy_apps.yml

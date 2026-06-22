@@ -1,0 +1,25 @@
+services:
+  backend:
+    build: ./backend
+    restart: always
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      DEPLOYMENT_ROOT: /deployment
+      SPLUNKAPPS_PATH: /deployment/apps
+    volumes:
+      - ./backend:/app
+      - ${DEPLOYMENT_ROOT}:/deployment:ro
+      - backend-data:/app/data
+
+  frontend:
+    build: ./frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  backend-data:

@@ -1,0 +1,19 @@
+---
+# ###############################################################
+#        _ _          _ _            _
+#   __ _(_) |_    ___| (_) ___ _ __ | |_
+#  / _` | | __|  / __| | |/ _ \ '_ \| __|
+# | (_| | | |_  | (__| | |  __/ | | | |_
+#  \__, |_|\__|  \___|_|_|\___|_| |_|\__|
+#  |___/
+# ###############################################################
+- hosts: git_client
+  vars:
+    deployment_repo_root: "{{ playbook_dir | dirname }}"
+
+  tasks:
+    - name: Pull latest branch at repo root "{{ deployment_repo_root }}"
+      ansible.builtin.command: git pull
+      args:
+        chdir: "{{ deployment_repo_root }}"
+      delegate_to: 127.0.0.1
