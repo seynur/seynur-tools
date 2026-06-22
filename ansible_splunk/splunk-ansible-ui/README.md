@@ -19,17 +19,22 @@ Ansible playbooks and inventory live in a separate **splunk-deployment-config** 
 - Network access from the backend container to your Splunk hosts over SSH
 - Ansible collections (`ansible.posix`, `community.docker`) — installed in the backend image
 
-Complete **splunk-deployment-config** setup (including Git remote) before starting the UI. See the combined guide in the parent `release/README.md` if you use the release bundle.
+Complete **splunk-deployment-config** setup (including Git remote) before starting the UI. For the full end-to-end guide, see [ansible_splunk/README.md](https://github.com/seynur/seynur-tools/blob/main/ansible_splunk/README.md) in the seynur-tools repository.
 
 ---
 
 ## Quick start (Docker Compose)
 
-### 1. Clone both repositories
+### 1. Download both repositories
+
+These templates live in the [seynur-tools](https://github.com/seynur/seynur-tools) monorepo under `ansible_splunk/`. Use [degit](https://github.com/Rich-Harris/degit) to fetch each subfolder (requires Node.js):
 
 ```bash
-git clone <splunk-ansible-ui-url> splunk-ansible-ui
-git clone <splunk-deployment-config-url> splunk-deployment-config
+npx degit seynur/seynur-tools/ansible_splunk/splunk-ansible-ui splunk-ansible-ui
+npx degit seynur/seynur-tools/ansible_splunk/splunk-deployment-config splunk-deployment-config
+cd splunk-deployment-config
+git init
+git remote add origin https://github.com/your-org/your-splunk-config.git
 ```
 
 Example layout:
@@ -92,11 +97,19 @@ docker compose exec backend ssh splunk@your-splunk-host
 
 The **Apps** page commits and pushes changes to `splunk-deployment-config`. The mounted deployment repo must:
 
-1. Be a Git repository (`git init` or cloned from your remote)
-2. Have `user.name` and `user.email` configured for commits
-3. Have a **remote** configured (`git remote add origin <url>`) with push access
+1. Be downloaded from the template with `origin` pointing at your own remote (degit does not include Git history — initialize after download):
 
-If Git is not initialized or push fails, app changes are written locally but not published to your remote.
+   ```bash
+   npx degit seynur/seynur-tools/ansible_splunk/splunk-deployment-config splunk-deployment-config
+   cd splunk-deployment-config
+   git init
+   git remote add origin https://github.com/your-org/your-splunk-config.git
+   ```
+
+2. Have `user.name` and `user.email` configured for commits
+3. Have push access to that remote
+
+If the remote is not configured or push fails, app changes are written locally but not published to your remote.
 
 ### 5. Start the stack
 
