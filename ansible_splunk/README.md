@@ -11,11 +11,12 @@ This folder contains two repositories intended to be published separately:
 
 ## End-to-end getting started
 
-### Step 1: Configure splunk-deployment-config
+### Step 1: Clone and configure splunk-deployment-config
 
 ```bash
-git clone <splunk-deployment-config-url> splunk-deployment-config
+git clone <splunk-deployment-config-template-url> splunk-deployment-config
 cd splunk-deployment-config
+git remote set-url origin https://github.com/your-org/your-splunk-config.git
 ```
 
 1. Add Splunk app directories under `apps/` (one folder per app).
@@ -24,13 +25,11 @@ cd splunk-deployment-config
 
 See **splunk-deployment-config/README.md** for inventory examples and target paths.
 
-### Step 2: Initialize Git and push
+### Step 2: Push to your repository
 
 ```bash
-git init
 git add .
-git commit -m "Initial deployment configuration"
-git remote add origin <your-git-remote-url>
+git commit -m "Initial customer configuration"
 git push -u origin main
 ```
 
@@ -105,4 +104,4 @@ docker compose exec backend ssh splunk@your-splunk-host
 - **splunk-ansible-ui/README.md** — Docker deployment, environment variables, Git and SSH setup
 - **splunk-deployment-config/README.md** — inventory, group_vars, CLI playbooks, UI integration
 
-Initialize Git in each directory before publishing to your own remotes.
+Clone each repository from the published template URLs and point `splunk-deployment-config` at your own remote before customizing.
