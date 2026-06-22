@@ -17,7 +17,8 @@ These templates live in the [seynur-tools](https://github.com/seynur/seynur-tool
 
 Requires Node.js. If unavailable, download ZIP from:
 https://github.com/seynur/seynur-tools/archive/main.zip
-and extract `ansible_splunk/splunk-deployment-config/`
+
+GitHub extracts to `seynur-tools-main/` — `cd seynur-tools-main/ansible_splunk/splunk-deployment-config`
 
 ```bash
 npx degit seynur/seynur-tools/ansible_splunk/splunk-deployment-config splunk-deployment-config
@@ -29,9 +30,9 @@ git remote add origin https://github.com/your-org/your-splunk-config.git
 Alternative: download ZIP from GitHub and extract:
 
 ```bash
-# Download https://github.com/seynur/seynur-tools/archive/main.zip
-# Extract ansible_splunk/splunk-deployment-config/
-cd splunk-deployment-config
+curl -LO https://github.com/seynur/seynur-tools/archive/main.zip
+unzip main.zip
+cd seynur-tools-main/ansible_splunk/splunk-deployment-config
 git init
 git remote add origin https://github.com/your-org/your-splunk-config.git
 ```

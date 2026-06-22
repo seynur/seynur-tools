@@ -11,9 +11,9 @@ services:
       # - GIT_AUTHOR_NAME=Splunk Ops
       # - GIT_AUTHOR_EMAIL=ops@example.com
     volumes:
-      - ${DEPLOYMENT_ROOT}:/deployment:ro
+      - ${DEPLOYMENT_ROOT}:/deployment
       - backend-data:/app/data
-      # Uncomment to mount SSH keys for Ansible:
+      # To enable Ansible SSH access, uncomment:
       # - ~/.ssh:/root/.ssh:ro
 
   frontend:

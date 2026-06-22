@@ -49,7 +49,8 @@ Download with [degit](https://github.com/Rich-Harris/degit) (recommended) or dow
 
 Requires Node.js. If unavailable, download ZIP from:
 https://github.com/seynur/seynur-tools/archive/main.zip
-and extract `ansible_splunk/splunk-deployment-config/`
+
+GitHub extracts to `seynur-tools-main/` — `cd seynur-tools-main/ansible_splunk/splunk-deployment-config`
 
 ### 1. Download the template and point at your repository
 
@@ -63,9 +64,9 @@ git remote add origin https://github.com/your-org/your-splunk-config.git
 Alternative: download ZIP from GitHub and extract:
 
 ```bash
-# Download https://github.com/seynur/seynur-tools/archive/main.zip
-# Extract ansible_splunk/splunk-deployment-config/
-cd splunk-deployment-config
+curl -LO https://github.com/seynur/seynur-tools/archive/main.zip
+unzip main.zip
+cd seynur-tools-main/ansible_splunk/splunk-deployment-config
 git init
 git remote add origin https://github.com/your-org/your-splunk-config.git
 ```
