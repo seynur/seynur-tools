@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 #
-# kamusm_timestamp.sh
+# DEPRECATED: use kamusm_timestamp.sh (batch create/verify) instead.
+# This single-bucket sample is kept for reference only.
+#
+# kamusm.sh — single-bucket KamuSM (Zamane) timestamp sample
 #
 # Locates the l2Hash (or l1Hashes, if the bucket hasn't rolled hot->warm yet) file
 # that Splunk's Data Integrity Control feature produces for a bucket, and time-stamps
@@ -17,12 +20,12 @@
 # The official jar is therefore the only reliable integration path for now.
 #
 # Usage:
-#   ./kamusm_timestamp.sh <BUCKET_PATH>
-#   ./kamusm_timestamp.sh <HASH_FILE_PATH> [BUCKET_ID]
+#   ./kamusm.sh <BUCKET_PATH>
+#   ./kamusm.sh <HASH_FILE_PATH> [BUCKET_ID]
 #
-# Examples:
-#   ./kamusm_timestamp.sh /opt/splunk/var/lib/splunk/kamusm/db/db_1784289623_1784289517_0
-#   ./kamusm_timestamp.sh /opt/splunk/var/lib/splunk/kamusm/db/db_.../rawdata/l2Hash_0_XXXX.dat
+# Prefer:
+#   ./kamusm_timestamp.sh create  --splunkdb DIR --kamusmdb DIR
+#   ./kamusm_timestamp.sh verify  --splunkdb DIR --kamusmdb DIR
 #
 # Requires:
 #   - Java 1.8+ on PATH
@@ -34,6 +37,8 @@
 # this only on hosts where that is an acceptable risk, or under a locked-down account.
 #
 set -euo pipefail
+
+echo "WARNING: kamusm.sh is DEPRECATED. Use ./kamusm_timestamp.sh create|verify instead." >&2
 
 ### --- CONFIG --- ###
 TSA_URL="http://tzd.kamusm.gov.tr"      # Test server. Production: http://zd.kamusm.gov.tr
