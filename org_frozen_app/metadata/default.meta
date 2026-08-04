@@ -1,0 +1,4 @@
+# Make the app's knowledge objects global (adjust to your governance).
+[]
+access = read : [ * ], write : [ admin ]
+export = system

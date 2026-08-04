@@ -1,0 +1,26 @@
+# -----------------------------------------------------------------------------
+# EXAMPLE ONLY -- do not ship this as live indexes.conf inside org_frozen_app.
+#
+# coldToFrozenScript is an INDEX setting. On an indexer cluster it must live in
+# the indexes.conf that the Cluster Manager pushes in the peer bundle (your
+# _cluster / manager-apps indexes app), NOT in this app. Put the stanza below
+# wherever your index definitions already live, then push the bundle.
+#
+# Point coldToFrozenScript at the backend you want (one script per index or
+# under [default]). On CM-pushed peers the app lives under etc/slave-apps/:
+#   $SPLUNK_HOME/etc/slave-apps/org_frozen_app/bin/coldToFrozenSCP.py
+# Independent deploy under etc/apps/:
+#   $SPLUNK_HOME/etc/apps/org_frozen_app/bin/coldToFrozenSCP.py
+# -----------------------------------------------------------------------------
+
+# Apply to one index (SCP example — swap script name for S3/GCS):
+[my_index]
+coldToFrozenScript = "$SPLUNK_HOME/bin/python3" "$SPLUNK_HOME/etc/apps/org_frozen_app/bin/coldToFrozenSCP.py"
+
+# Alternatives:
+# coldToFrozenScript = "$SPLUNK_HOME/bin/python3" "$SPLUNK_HOME/etc/apps/org_frozen_app/bin/coldToFrozenS3.py"
+# coldToFrozenScript = "$SPLUNK_HOME/bin/python3" "$SPLUNK_HOME/etc/apps/org_frozen_app/bin/coldToFrozenGCS.py"
+
+# ...or apply to every index on the peer:
+# [default]
+# coldToFrozenScript = "$SPLUNK_HOME/bin/python3" "$SPLUNK_HOME/etc/apps/org_frozen_app/bin/coldToFrozenSCP.py"
