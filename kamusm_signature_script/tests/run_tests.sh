@@ -76,6 +76,19 @@ run_cli() {
   set -e
 }
 
+# Sorted "relpath size cksum" lines for every regular file under dir.
+snapshot_tree() {
+  local root="$1"
+  (
+    cd "$root" || exit 1
+    find . -type f -print | sort | while IFS= read -r rel; do
+      # cksum: CRC SIZE PATH
+      set -- $(cksum "$rel")
+      printf '%s %s %s\n' "$rel" "$2" "$1"
+    done
+  )
+}
+
 build_fixtures() {
   local base="$1"
   local splunkdb="$base/splunkdb"
@@ -86,12 +99,14 @@ build_fixtures() {
     "$splunkdb/firewall/db/db_100_90_0/rawdata" \
     "$splunkdb/firewall/db/db_200_190_1/rawdata" \
     "$splunkdb/firewall/db/hot_v1_0/rawdata" \
+    "$splunkdb/firewall/colddb/db_300_290_2/rawdata" \
     "$splunkdb/other/db/db_1_0_0/rawdata" \
     "$kamusmdb/firewall"
 
   printf 'hash-aaa' >"$splunkdb/firewall/db/db_100_90_0/rawdata/l2Hash_0_aaa.dat"
   printf 'hash-bbb' >"$splunkdb/firewall/db/db_200_190_1/rawdata/l2Hash_0_bbb.dat"
   printf 'hash-hot' >"$splunkdb/firewall/db/hot_v1_0/rawdata/l1Hashes_0_ccc.dat"
+  printf 'hash-cold' >"$splunkdb/firewall/colddb/db_300_290_2/rawdata/l2Hash_0_cold.dat"
   printf 'hash-ddd' >"$splunkdb/other/db/db_1_0_0/rawdata/l2Hash_0_ddd.dat"
 
   # Pre-stamp firewall/db_100_90_0 with a valid mock token matching current hash.
@@ -109,18 +124,25 @@ build_fixtures() {
 
 test_create_stamps_unsigned_skips_hot_and_stamped() {
   echo "TEST: create stamps only unstamped l2 buckets"
-  local base out
+  local base before after zd_hits
   base="$(mktemp -d)"
   build_fixtures "$base"
 
+  before="$(snapshot_tree "$base/splunkdb")"
   run_cli create --splunkdb "$base/splunkdb" --kamusmdb "$base/kamusmdb"
+  after="$(snapshot_tree "$base/splunkdb")"
+  zd_hits="$(find "$base/splunkdb" -name '*.zd' 2>/dev/null | wc -l | tr -d ' ')"
+
   assert_eq "exit 0" "0" "$RUN_RC"
+  assert_eq "splunkdb snapshot unchanged" "$before" "$after"
+  assert_eq "no .zd under splunkdb" "0" "$zd_hits"
   assert_file "stamped db_200_190_1" "$base/kamusmdb/firewall/db_200_190_1.zd"
+  assert_file "stamped colddb bucket" "$base/kamusmdb/firewall/db_300_290_2.zd"
   assert_file "stamped other db_1_0_0" "$base/kamusmdb/other/db_1_0_0.zd"
   assert_no_file "did not stamp hot bucket" "$base/kamusmdb/firewall/hot_v1_0.zd"
   assert_contains "skipped already stamped" "$RUN_OUT" "skipped:"
   assert_file "ledger exists" "$base/kamusmdb/ledger.csv"
-  assert_contains "stamped count" "$RUN_OUT" "stamped: 2"
+  assert_contains "stamped count" "$RUN_OUT" "stamped: 3"
 
   rm -rf "$base"
 }
@@ -134,8 +156,10 @@ test_create_dry_run() {
   run_cli create --splunkdb "$base/splunkdb" --kamusmdb "$base/kamusmdb" --dry-run
   assert_eq "exit 0" "0" "$RUN_RC"
   assert_contains "lists db_200_190_1" "$RUN_OUT" "firewall/db_200_190_1"
+  assert_contains "lists colddb" "$RUN_OUT" "firewall/db_300_290_2"
   assert_contains "lists other" "$RUN_OUT" "other/db_1_0_0"
   assert_no_file "no new firewall token" "$base/kamusmdb/firewall/db_200_190_1.zd"
+  assert_no_file "no colddb token" "$base/kamusmdb/firewall/db_300_290_2.zd"
   assert_no_file "no other token" "$base/kamusmdb/other/db_1_0_0.zd"
   assert_no_file "no ledger" "$base/kamusmdb/ledger.csv"
   assert_contains "dry-run message" "$RUN_OUT" "Dry-run"
@@ -152,7 +176,27 @@ test_create_index_filter() {
   run_cli create --splunkdb "$base/splunkdb" --kamusmdb "$base/kamusmdb" --index firewall
   assert_eq "exit 0" "0" "$RUN_RC"
   assert_file "stamped firewall bucket" "$base/kamusmdb/firewall/db_200_190_1.zd"
+  assert_file "stamped firewall colddb" "$base/kamusmdb/firewall/db_300_290_2.zd"
   assert_no_file "did not stamp other" "$base/kamusmdb/other/db_1_0_0.zd"
+
+  rm -rf "$base"
+}
+
+test_create_force_restamps() {
+  echo "TEST: create --force re-stamps existing token"
+  local base
+  base="$(mktemp -d)"
+  build_fixtures "$base"
+
+  run_cli create --splunkdb "$base/splunkdb" --kamusmdb "$base/kamusmdb" --force
+  assert_eq "exit 0" "0" "$RUN_RC"
+  assert_contains "stamped all l2" "$RUN_OUT" "stamped: 4"
+  assert_file "force token db_100" "$base/kamusmdb/firewall/db_100_90_0.zd"
+  assert_file "force token colddb" "$base/kamusmdb/firewall/db_300_290_2.zd"
+
+  run_cli verify --splunkdb "$base/splunkdb" --kamusmdb "$base/kamusmdb" --strict-coverage
+  assert_eq "verify after force" "0" "$RUN_RC"
+  assert_contains "all verify_ok" "$RUN_OUT" "verify_ok:     4"
 
   rm -rf "$base"
 }
@@ -162,12 +206,12 @@ test_verify_reports_unstamped_and_passed() {
   local base
   base="$(mktemp -d)"
   build_fixtures "$base"
-  # Stamp remaining so only... actually leave db_200 and other unstamped
   run_cli verify --splunkdb "$base/splunkdb" --kamusmdb "$base/kamusmdb"
   assert_eq "exit 0 (no verify_failed)" "0" "$RUN_RC"
   assert_contains "verify_ok for pre-stamped" "$RUN_OUT" "verify_ok:     1"
   assert_contains "unstamped listed" "$RUN_OUT" "unstamped:"
   assert_contains "unstamped db_200" "$RUN_OUT" "firewall/db_200_190_1"
+  assert_contains "unstamped colddb" "$RUN_OUT" "firewall/db_300_290_2"
   assert_contains "passed with unstamped" "$RUN_OUT" "passed (with unstamped buckets)"
 
   rm -rf "$base"
@@ -230,6 +274,7 @@ main() {
     test_create_stamps_unsigned_skips_hot_and_stamped
     test_create_dry_run
     test_create_index_filter
+    test_create_force_restamps
     test_verify_reports_unstamped_and_passed
     test_verify_fails_on_bad_token
     test_orphan_zd_does_not_fail

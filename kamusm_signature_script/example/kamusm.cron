@@ -1,0 +1,26 @@
+# /etc/cron.d/kamusm — KamuSM bucket signing, runs as the splunk user
+#
+# Install identically on each indexer peer (local KAMUSMDB per host):
+#     sudo install -o root -g root -m 0644 kamusm.cron /etc/cron.d/kamusm
+#
+# The 6th field (splunk) is the user the job runs as. No staggering needed
+# when each indexer has its own local KAMUSMDB.
+#
+SHELL=/bin/bash
+PATH=/usr/bin:/bin:/usr/local/bin
+
+# --- CREATE: stamp newly-rolled warm/cold buckets (idempotent, hourly) ------
+# Bump to */15 if any signed index rolls-and-freezes fast, so buckets are
+# stamped before frozenTimePeriodInSecs removes them.
+5 * * * *   splunk  /opt/kamusm/script/kamusm_run.sh create
+
+# --- VERIFY: re-check tokens + coverage (weekly, Sun 03:30 UTC) --------------
+30 3 * * 0  splunk  /opt/kamusm/script/kamusm_run.sh verify --strict-coverage
+
+# ---------------------------------------------------------------------------
+# ALTERNATIVE: splunk's own user crontab instead of /etc/cron.d
+#   sudo -u splunk crontab -e
+# then add (NO username field):
+#   5 * * * *   /opt/kamusm/script/kamusm_run.sh create
+#   30 3 * * 0  /opt/kamusm/script/kamusm_run.sh verify --strict-coverage
+# ---------------------------------------------------------------------------

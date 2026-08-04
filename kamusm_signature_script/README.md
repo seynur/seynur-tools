@@ -4,12 +4,17 @@ Batch-create and verify **TÜBİTAK KamuSM (Zamane)** timestamps for Splunk warm
 
 ## Scripts
 
-| File | Status | Purpose |
-|------|--------|---------|
-| [`kamusm_timestamp.sh`](kamusm_timestamp.sh) | **Use this** | Batch `create` / `verify` over `$SPLUNKDB` |
-| [`kamusm.sh`](kamusm.sh) | **DEPRECATED** | Single-bucket sample; kept for reference only |
-| [`lib/kamusm_common.sh`](lib/kamusm_common.sh) | Library | Shared helpers + jar/mock backends |
-| [`tests/run_tests.sh`](tests/run_tests.sh) | Tests | Mock-backend tests (no network / no jar) |
+| File | Purpose |
+|------|---------|
+| [`kamusm_timestamp.sh`](kamusm_timestamp.sh) | Batch `create` / `verify` over `$SPLUNKDB` |
+| [`lib/kamusm_common.sh`](lib/kamusm_common.sh) | Shared helpers + jar/mock backends |
+| [`example/`](example/) | Cron wrapper, env example, and clustered-indexer install notes |
+| [`tests/run_tests.sh`](tests/run_tests.sh) | Mock-backend tests (no network / no jar) |
+
+## Contracts
+
+- Tokens are written only under `$KAMUSMDB` as `$KAMUSMDB/<index>/<bucket_id>.zd` (plus `ledger.csv`).
+- `create` / `verify` never write under `$SPLUNKDB` (bucket dirs stay read-only). The jar backend stamps a copy in a private scratch dir, then moves the `.zd` into `$KAMUSMDB`.
 
 ## Prerequisites
 
@@ -41,18 +46,18 @@ export KAMUSM_JAR_PATH=/path/to/tss-client-console-3.1.33.jar
 ```bash
 ./kamusm_timestamp.sh create \
   --splunkdb /opt/splunk/var/lib/splunk \
-  --kamusmdb /opt/kamusmsignatures
+  --kamusmdb /opt/kamusm/db
 
 # One index only
 ./kamusm_timestamp.sh create \
   --splunkdb /opt/splunk/var/lib/splunk \
-  --kamusmdb /opt/kamusmsignatures \
+  --kamusmdb /opt/kamusm/db \
   --index firewall
 
 # Preview without calling KamuSM
 ./kamusm_timestamp.sh create \
   --splunkdb /opt/splunk/var/lib/splunk \
-  --kamusmdb /opt/kamusmsignatures \
+  --kamusmdb /opt/kamusm/db \
   --dry-run
 
 # Re-stamp buckets that already have a .zd
@@ -64,11 +69,11 @@ export KAMUSM_JAR_PATH=/path/to/tss-client-console-3.1.33.jar
 ```bash
 ./kamusm_timestamp.sh verify \
   --splunkdb /opt/splunk/var/lib/splunk \
-  --kamusmdb /opt/kamusmsignatures
+  --kamusmdb /opt/kamusm/db
 
 ./kamusm_timestamp.sh verify \
   --splunkdb /opt/splunk/var/lib/splunk \
-  --kamusmdb /opt/kamusmsignatures \
+  --kamusmdb /opt/kamusm/db \
   --index firewall
 
 # Also fail if any l2Hash bucket lacks a .zd
@@ -82,9 +87,13 @@ $KAMUSMDB/<index>/<bucket_id>.zd
 $KAMUSMDB/ledger.csv          # audit trail only
 ```
 
-Example: `/opt/kamusmsignatures/firewall/db_1784289623_1784289517_0.zd`
+Example: `/opt/kamusm/db/firewall/db_1784289623_1784289517_0.zd`
 
 The script stamps only buckets that already have `l2Hash` (warm/cold/thawed under `db`, `colddb`, `thaweddb`). Hot buckets with only `l1Hashes` are ignored.
+
+## Automation (clustered indexers)
+
+See [`example/`](example/) for a scheduler-friendly wrapper (`kamusm_run.sh`), cron snippet, and env template. Deploy on each indexer peer with a **local** `$KAMUSMDB`.
 
 ## Environment variables
 

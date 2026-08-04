@@ -105,7 +105,7 @@ _resolve_bucket() {
 
 cmd_create() {
   local splunkdb="" kamusmdb="" index_filter="" dry_run=0 force=0
-  local key index bucket_id resolved bucket_path hash_file dest jar_out
+  local key index bucket_id resolved bucket_path hash_file dest
   local stamped=0 skipped=0 failed=0
 
   while [[ $# -gt 0 ]]; do
@@ -186,23 +186,19 @@ cmd_create() {
     bucket_path="${resolved%%	*}"
     hash_file="${resolved#*	}"
     dest="$(token_path "$kamusmdb" "$index" "$bucket_id")"
-    jar_out="${hash_file}.zd"
 
     mkdir -p "$(dirname "$dest")"
-    rm -f "$jar_out"
 
-    if ! stamp_file "$hash_file"; then
+    if ! stamp_file "$hash_file" "$dest"; then
       log_err "FAIL: stamp failed for $key"
       failed=$((failed + 1))
       continue
     fi
-    if [[ ! -f "$jar_out" ]]; then
-      log_err "FAIL: token not produced for $key ($jar_out)"
+    if [[ ! -f "$dest" ]]; then
+      log_err "FAIL: token not produced for $key ($dest)"
       failed=$((failed + 1))
       continue
     fi
-
-    mv "$jar_out" "$dest"
     append_ledger "$kamusmdb" "$(date -u +%Y%m%dT%H%M%SZ)" \
       "$index" "$bucket_id" "l2Hash" "$(hex_encode "$hash_file")" \
       "$hash_file" "$dest"

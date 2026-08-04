@@ -55,11 +55,6 @@ bucket_id_from_path() {
   basename "$1"
 }
 
-# Path: .../<index>/{db|colddb|thaweddb}/<bucket_id>
-index_from_bucket_path() {
-  basename "$(dirname "$(dirname "$1")")"
-}
-
 token_path() {
   local kamusmdb="$1" index="$2" bucket_id="$3"
   printf '%s/%s/%s.zd' "$kamusmdb" "$index" "$bucket_id"
@@ -154,11 +149,6 @@ _emit_tokens_for_index() {
   done
 }
 
-# Key used for set membership: index/bucket_id
-bucket_key() {
-  printf '%s/%s' "$1" "$2"
-}
-
 append_ledger() {
   local kamusmdb="$1"
   local timestamp_utc="$2"
@@ -180,7 +170,9 @@ append_ledger() {
 
 # ---------------------------------------------------------------------------
 # Backend: stamp_file / verify_token
-# stamp_file writes <hash_file>.zd on success (caller moves to token_path).
+# stamp_file HASH_FILE DEST_ZD — writes the token at DEST_ZD via temp-then-mv.
+# Never writes into the directory that holds HASH_FILE (Splunk buckets stay
+# read-only). A failed stamp leaves any prior DEST_ZD intact.
 # ---------------------------------------------------------------------------
 
 _mock_marker_for_file() {
@@ -190,11 +182,15 @@ _mock_marker_for_file() {
   printf 'MOCK-ZD:%s\n' "$digest"
 }
 
+# stamp_file HASH_FILE DEST_ZD
+# Produces the timestamp token directly at DEST_ZD. Never writes into the
+# directory that holds HASH_FILE, so Splunk bucket directories stay read-only.
 stamp_file() {
   local hash_file="$1"
+  local dest_zd="$2"
   case "$KAMUSM_BACKEND" in
-    mock) _stamp_file_mock "$hash_file" ;;
-    jar)  _stamp_file_jar "$hash_file" ;;
+    mock) _stamp_file_mock "$hash_file" "$dest_zd" ;;
+    jar)  _stamp_file_jar "$hash_file" "$dest_zd" ;;
     *)    die "unknown KAMUSM_BACKEND='$KAMUSM_BACKEND' (use jar or mock)" ;;
   esac
 }
@@ -211,8 +207,12 @@ verify_token() {
 
 _stamp_file_mock() {
   local hash_file="$1"
-  local out="${hash_file}.zd"
-  _mock_marker_for_file "$hash_file" >"$out"
+  local dest_zd="$2"
+  local tmp
+  mkdir -p "$(dirname "$dest_zd")"
+  tmp="${dest_zd}.tmp.$$"
+  _mock_marker_for_file "$hash_file" >"$tmp"
+  mv -f -- "$tmp" "$dest_zd"
 }
 
 _verify_token_mock() {
@@ -232,7 +232,7 @@ _verify_token_mock() {
 
 _stamp_file_jar() {
   local hash_file="$1"
-  local out="${hash_file}.zd"
+  local dest_zd="$2"
 
   [[ -n "$CUSTOMER_NO" && -n "$CUSTOMER_PASSWORD" ]] || {
     log_err "KAMUSM_CUSTOMER_NO / KAMUSM_CUSTOMER_PASSWORD are not set"
@@ -243,17 +243,36 @@ _stamp_file_jar() {
     return 1
   }
 
-  rm -f "$out"
-  if ! java -jar "$JAR_PATH" -ZC "$hash_file" "$TSA_URL" "$TSA_PORT" \
+  # The Zamane jar writes its token as <input>.zd next to the input file.
+  # To avoid writing anything into the Splunk bucket directory, copy the hash
+  # file into a private scratch dir, stamp the copy there, then move the token
+  # to DEST_ZD. The token is over the file CONTENT (RFC 3161 message imprint),
+  # so verifying later against the original hash_file still succeeds.
+  local work in out rc=0 msg=""
+  work="$(mktemp -d "${TMPDIR:-/tmp}/kamusm.XXXXXX")" || {
+    log_err "could not create scratch dir for stamping"
+    return 1
+  }
+  in="$work/$(basename "$hash_file")"
+  out="${in}.zd"
+
+  if ! cp -p -- "$hash_file" "$in"; then
+    msg="could not copy hash file to scratch: $hash_file"; rc=1
+  elif ! java -jar "$JAR_PATH" -ZC "$in" "$TSA_URL" "$TSA_PORT" \
       "$CUSTOMER_NO" "$CUSTOMER_PASSWORD" "$HASH_ALG"; then
-    log_err "Zamane client stamp failed for: $hash_file"
-    return 1
+    msg="Zamane client stamp failed for: $hash_file"; rc=1
+  elif [[ ! -f "$out" ]]; then
+    msg="expected token file not found: $out"; rc=1
+  else
+    mkdir -p "$(dirname "$dest_zd")"
+    if ! mv -f -- "$out" "$dest_zd"; then
+      msg="could not move token to: $dest_zd"; rc=1
+    fi
   fi
-  if [[ ! -f "$out" ]]; then
-    log_err "expected token file not found: $out"
-    return 1
-  fi
-  return 0
+
+  rm -rf "$work"
+  [[ "$rc" -eq 0 ]] || log_err "$msg"
+  return "$rc"
 }
 
 _verify_token_jar() {
@@ -265,7 +284,7 @@ _verify_token_jar() {
 }
 
 require_jar_backend_prereqs() {
-  require_cmds java find basename dirname sort head mkdir mv cat
+  require_cmds java find basename dirname sort head mkdir mv cat cp mktemp
   [[ -f "$JAR_PATH" ]] || die "Zamane console jar not found at: $JAR_PATH
 Download it or set KAMUSM_JAR_PATH:
 https://kamusm.bilgem.tubitak.gov.tr/urunler/zaman_damgasi/ucretsiz_zaman_damgasi_istemci_yazilimi.jsp"
