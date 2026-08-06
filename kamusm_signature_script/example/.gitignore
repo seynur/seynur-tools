@@ -1,0 +1,5 @@
+# running examples locally would create the log files
+logs/
+
+# ignore the env file used for testing purposes
+kamusm.env
