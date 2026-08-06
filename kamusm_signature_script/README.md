@@ -106,10 +106,16 @@ See [`example/`](example/) for a scheduler-friendly wrapper (`kamusm_run.sh`), c
 | `KAMUSM_TSA_URL` | `http://tzd.kamusm.gov.tr` | Test TSA; prod: `http://zd.kamusm.gov.tr` |
 | `KAMUSM_TSA_PORT` | `80` | TSA port |
 | `KAMUSM_HASH_ALG` | `sha-256` | Digest algorithm passed to the jar |
+| `KAMUSM_PROXY_IP` | (unset) | Optional HTTP proxy host for jar `create` |
+| `KAMUSM_PROXY_PORT` | (unset) | Optional HTTP proxy port (required if IP set) |
+| `KAMUSM_PROXY_USER` | (unset) | Optional proxy username (Basic auth) |
+| `KAMUSM_PROXY_PASSWORD` | (unset) | Optional proxy password (requires USER) |
 
 ## Security note
 
-The Zamane jar accepts the password as a command-line argument, which can appear in `ps` for a short time. Run under a locked-down account on hosts where that risk is acceptable.
+The Zamane jar accepts the customer password (and proxy password, when set) as
+command-line arguments, which can appear in `ps` for a short time. Run under a
+locked-down account on hosts where that risk is acceptable.
 
 ## Tests (no network / no jar)
 

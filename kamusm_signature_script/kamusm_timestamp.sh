@@ -19,8 +19,10 @@
 #   KAMUSM_JAR_PATH     path to tss-client-console-*.jar
 #   KAMUSM_BACKEND      jar (default) | mock
 #   KAMUSM_TSA_URL / KAMUSM_TSA_PORT / KAMUSM_HASH_ALG
+#   KAMUSM_PROXY_IP / KAMUSM_PROXY_PORT [/ KAMUSM_PROXY_USER / KAMUSM_PROXY_PASSWORD]
+#     optional; passed as Zamane jar CLI args (create only)
 #
-# SECURITY NOTE: the jar accepts the password as a CLI argument (visible via ps).
+# SECURITY NOTE: the jar accepts passwords as CLI arguments (visible via ps).
 # Run only on hosts where that risk is acceptable, or under a locked-down account.
 #
 set -euo pipefail
@@ -59,6 +61,7 @@ Options:
 Environment:
   KAMUSM_BACKEND=jar|mock   (default: jar; mock needs no credentials)
   KAMUSM_CUSTOMER_NO / KAMUSM_CUSTOMER_PASSWORD / KAMUSM_JAR_PATH
+  KAMUSM_PROXY_IP / KAMUSM_PROXY_PORT [/ USER / PASSWORD]  (optional; create)
 EOF
   exit 1
 }

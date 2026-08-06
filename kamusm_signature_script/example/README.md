@@ -95,6 +95,10 @@ The signer never writes under `$SPLUNKDB`; tokens land only under `$KAMUSMDB`.
   limitation).
 - **Production TSA:** set `KAMUSM_TSA_URL=http://zd.kamusm.gov.tr` in `kamusm.env`
   (the tool otherwise defaults to the test server).
+- **HTTP proxy:** apt’s proxy config is not used. Set `KAMUSM_PROXY_IP` /
+  `KAMUSM_PROXY_PORT` (and optional `KAMUSM_PROXY_USER` /
+  `KAMUSM_PROXY_PASSWORD`) in `kamusm.env` — these become Zamane jar CLI args
+  on `create`. `verify` is offline and does not need them.
 - **Back up `/opt/kamusm/db`** on each indexer — `.zd` tokens + `ledger.csv` are
   your tamper-evidence proof and should survive independently of Splunk DB.
 - **SmartStore:** if any signed index uses S2, evicted buckets aren't local and

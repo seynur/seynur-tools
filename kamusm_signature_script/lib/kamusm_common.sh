@@ -14,6 +14,10 @@
 : "${HASH_ALG:=sha-256}"
 : "${CUSTOMER_NO:=${KAMUSM_CUSTOMER_NO:-}}"
 : "${CUSTOMER_PASSWORD:=${KAMUSM_CUSTOMER_PASSWORD:-}}"
+: "${PROXY_IP:=${KAMUSM_PROXY_IP:-}}"
+: "${PROXY_PORT:=${KAMUSM_PROXY_PORT:-}}"
+: "${PROXY_USER:=${KAMUSM_PROXY_USER:-}}"
+: "${PROXY_PASSWORD:=${KAMUSM_PROXY_PASSWORD:-}}"
 
 # Bucket store subdirs under each index that may hold warm/cold/thawed buckets.
 readonly KAMUSM_BUCKET_SUBDIRS="db colddb thaweddb"
@@ -243,12 +247,30 @@ _stamp_file_jar() {
     return 1
   }
 
+  # Optional proxy: Zamane jar takes positional CLI args (not JVM props).
+  # Digest type must come last: ... [proxyIP proxyPort [user pass]] hash_alg
+  if [[ -n "$PROXY_IP" && -z "$PROXY_PORT" ]]; then
+    log_err "KAMUSM_PROXY_IP set but KAMUSM_PROXY_PORT empty"
+    return 1
+  fi
+  if [[ -n "$PROXY_USER" || -n "$PROXY_PASSWORD" ]]; then
+    if [[ -z "$PROXY_IP" || -z "$PROXY_PORT" ]]; then
+      log_err "KAMUSM_PROXY_USER/PASSWORD require KAMUSM_PROXY_IP and KAMUSM_PROXY_PORT"
+      return 1
+    fi
+    if [[ -z "$PROXY_USER" || -z "$PROXY_PASSWORD" ]]; then
+      log_err "KAMUSM_PROXY_USER and KAMUSM_PROXY_PASSWORD must both be set"
+      return 1
+    fi
+  fi
+
   # The Zamane jar writes its token as <input>.zd next to the input file.
   # To avoid writing anything into the Splunk bucket directory, copy the hash
   # file into a private scratch dir, stamp the copy there, then move the token
   # to DEST_ZD. The token is over the file CONTENT (RFC 3161 message imprint),
   # so verifying later against the original hash_file still succeeds.
   local work in out rc=0 msg=""
+  local -a jargs
   work="$(mktemp -d "${TMPDIR:-/tmp}/kamusm.XXXXXX")" || {
     log_err "could not create scratch dir for stamping"
     return 1
@@ -256,10 +278,18 @@ _stamp_file_jar() {
   in="$work/$(basename "$hash_file")"
   out="${in}.zd"
 
+  jargs=(-ZC "$in" "$TSA_URL" "$TSA_PORT" "$CUSTOMER_NO" "$CUSTOMER_PASSWORD")
+  if [[ -n "$PROXY_IP" ]]; then
+    jargs+=("$PROXY_IP" "$PROXY_PORT")
+    if [[ -n "$PROXY_USER" ]]; then
+      jargs+=("$PROXY_USER" "$PROXY_PASSWORD")
+    fi
+  fi
+  jargs+=("$HASH_ALG")
+
   if ! cp -p -- "$hash_file" "$in"; then
     msg="could not copy hash file to scratch: $hash_file"; rc=1
-  elif ! java -jar "$JAR_PATH" -ZC "$in" "$TSA_URL" "$TSA_PORT" \
-      "$CUSTOMER_NO" "$CUSTOMER_PASSWORD" "$HASH_ALG"; then
+  elif ! java -jar "$JAR_PATH" "${jargs[@]}"; then
     msg="Zamane client stamp failed for: $hash_file"; rc=1
   elif [[ ! -f "$out" ]]; then
     msg="expected token file not found: $out"; rc=1
