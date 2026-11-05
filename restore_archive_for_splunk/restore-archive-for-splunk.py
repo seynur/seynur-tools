@@ -1,305 +1,868 @@
+import argparse
+from contextlib import contextmanager
+from functools import partial
+import json
+import math
 import os
-import time
+import re
 import shutil
+import stat
 import subprocess
 import sys
-import argparse
-import re
+import tempfile
+import time
+import uuid
 from datetime import datetime
-import json
+from pathlib import Path
+from typing import Callable, Iterable, Sequence
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-def handle_dates(oldest_time,newest_time):
-    '''Returns start and end datetime in int.
-    Converts datetime to epoch to find correct buckets.
-    '''
-    epoch_time = []
-    for date in [oldest_time,newest_time]:
+
+VERSION = "1.1.1"
+DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+BUCKET_PATTERN = re.compile(
+    r"^(?P<prefix>db|rb)_"
+    r"(?P<newest>\d+)_"
+    r"(?P<oldest>\d+)_"
+    r"(?P<bucket_id>[A-Za-z0-9][A-Za-z0-9.-]*(?:_[A-Za-z0-9][A-Za-z0-9.-]*)*)$"
+)
+INTEGRITY_PATTERN = re.compile(r"succeeded=(\d+),\s*failed=(\d+)")
+
+Bucket = dict[str, int | str]
+Runner = Callable[..., subprocess.CompletedProcess[str]]
+JOURNALS = {"journal.zst", "journal.gz"}
+
+
+def run_command(command: Sequence[str], *, timeout: float = 3600, **kwargs):
+    """Bound external work and prevent interactive CLI prompts from hanging."""
+    return subprocess.run(command, timeout=timeout, stdin=subprocess.DEVNULL, **kwargs)
+
+
+def validate_index(index: str) -> None:
+    if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", index):
+        raise ValueError(f"Invalid index name: {index!r}; expected a single safe name")
+
+
+def eprint(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+
+def parse_bucket_name(name: str) -> Bucket | None:
+    """Parse db/rb bucket names, including suffixes with extra segments."""
+
+    match = BUCKET_PATTERN.fullmatch(name)
+    if not match:
+        return None
+    newest = int(match.group("newest"))
+    oldest = int(match.group("oldest"))
+    if newest < oldest:
+        return None
+    return {
+        "name": name,
+        "newest": newest,
+        "oldest": oldest,
+        "id": match.group("bucket_id"),
+    }
+
+
+def parse_datetime(value: str, timezone_name: str | None = None) -> int:
+    try:
+        parsed = datetime.strptime(value, DATE_FORMAT)
+    except ValueError as exc:
+        raise ValueError(
+            f"Invalid date {value!r}; expected format {DATE_FORMAT!r}"
+        ) from exc
+
+    if timezone_name:
         try:
-            date = time.strptime(date, "%Y-%m-%d %H:%M:%S")
-            epoch_time.append(int(time.mktime(date).__str__().split(".")[0]))
-        except ValueError as e:
-            print(f"Error: Invalid date format '{date}'. Expected format: '%Y-%m-%d %H:%M:%S'. Error: {e}")
-            sys.exit(1)
-    
-    if len(epoch_time) != 2:
-        print(f"Error: Expected 2 dates, but processed {len(epoch_time)} dates")
-        sys.exit(1)
-        
-    return epoch_time[0], epoch_time[1]
+            timezone = ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError(f"Unknown timezone: {timezone_name}") from exc
+        candidates = {
+            int(parsed.replace(tzinfo=timezone, fold=fold).timestamp())
+            for fold in (0, 1)
+            if datetime.fromtimestamp(
+                parsed.replace(tzinfo=timezone, fold=fold).timestamp(), timezone
+            ).replace(tzinfo=None) == parsed
+        }
+        if len(candidates) != 1:
+            raise ValueError(
+                f"Ambiguous or nonexistent local time {value!r} in {timezone_name}; "
+                "specify the interval in UTC"
+            )
+        return candidates.pop()
+    return int(time.mktime(parsed.timetuple()))
 
 
-def find_buckets(source_path, oldest_epoch_time, newest_epoch_time):
-    '''Returns the list buckets_found.
-    Finds buckets in source path according to oldest and newest epoch time.
+def handle_dates(
+    oldest_time: str,
+    newest_time: str,
+    timezone_name: str | None = None,
+) -> tuple[int, int]:
+    """Convert the requested interval to epoch seconds and validate order."""
 
-    Keyword arguments:
-    source_path -- archive path (frozendb)
-    oldest_epoch_time -- oldest date
-    newest_epoch_time -- newest date
-    '''
-    try:
-        bucket_list = os.listdir(source_path)
-    except (OSError, FileNotFoundError) as e:
-        print(f"Error: Cannot access source path '{source_path}': {e}")
-        return []
+    oldest = parse_datetime(oldest_time, timezone_name)
+    newest = parse_datetime(newest_time, timezone_name)
+    if oldest > newest:
+        raise ValueError("oldest_time must be earlier than or equal to newest_time")
+    return oldest, newest
 
-    buckets_found = []
-    for i in bucket_list:
-        bucket = i.split("_", maxsplit=3)
 
-        # Skip invalid bucket names
-        if len(bucket) < 4:
-            print(f"Warning: Skipping bucket '{i}' - unexpected format (expected: index_epoch1_epoch2_randomid)")
-            continue
-
+def format_epoch(epoch: int, timezone_name: str | None = None) -> str:
+    if timezone_name:
         try:
-            newest_bucket_epoch_time = int(bucket[1])
-            oldest_bucket_epoch_time = int(bucket[2])
-        except (ValueError, IndexError) as e:
-            print(f"Warning: Skipping bucket '{i}' - invalid epoch time format: {e}")
-            continue
-
-        if (newest_bucket_epoch_time >= oldest_epoch_time and oldest_bucket_epoch_time <= newest_epoch_time):
-            buckets_found.append(i)
-
-    print("---------------------------")
-    print(f"The number of bucket(s) found in the local path: {len(buckets_found)}.")
-    return buckets_found
+            timezone = ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError(f"Unknown timezone: {timezone_name}") from exc
+        return datetime.fromtimestamp(epoch, timezone).strftime(DATE_FORMAT)
+    return time.strftime(DATE_FORMAT, time.localtime(epoch))
 
 
-def find_oldest_and_newest_bucket_dates(buckets_found, source_path="", index=""):
-    '''Finds oldest and newest date of the buckets for specific index.'''
-    bucket_dates = [tuple(map(int, bucket.split("_")[1:3])) for bucket in buckets_found]
-    oldest_epoch_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(min(d[0] for d in bucket_dates)))
-    newest_epoch_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(max(d[1] for d in bucket_dates)))
+def find_buckets(
+    source_path: str | os.PathLike[str],
+    oldest_epoch_time: int,
+    newest_epoch_time: int,
+) -> list[str]:
+    """Find bucket directories that overlap the requested interval."""
 
-    if not index and source_path:
-        if len(source_path.split("/"))>0:
-            index = source_path.split("/")[-1] if len(source_path.split("/")[-1])>0 else source_path.split("/")[-2]
-        elif len(source_path.split("\\"))>0:
-            index = source_path.split("\\")[-1] if len(source_path.split("\\")[-1])>0 else source_path.split("\\")[-2]
+    source = Path(source_path).expanduser()
+    if not source.exists():
+        raise RuntimeError(f"Source path does not exist: {source}")
+    if not source.is_dir():
+        raise RuntimeError(f"Source path is not a directory: {source}")
 
-    print("---------------------------")
-    print(f"For '{index}' index")
-    print(f"Oldest date: '{oldest_epoch_time}', newest date: '{newest_epoch_time}'.\n")
-
-
-def restore_buckets_from_s3(index, frozendb, oldest_epoch_time, newest_epoch_time, bucket_name, s3_endpoint=""):
-    '''Lists and restores buckets from S3 (default or custom endpoint).'''
-    print("---------------------------")
-
-    list_cmd = [
-        "aws", "s3api", "list-objects",
-        "--bucket", bucket_name,
-        "--query", "Contents[].{Key: Key, Size: Size}"
-    ]
-
-    if s3_endpoint != "":
-        print(f"Listing and filtering S3 buckets from custom endpoint: {s3_endpoint}")
-        list_cmd += ["--endpoint-url", s3_endpoint]
-    else:
-        print("Listing and filtering S3 buckets from default AWS endpoint...")
-
-    try:
-        result = subprocess.check_output(list_cmd, stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError as e:
-        print(f"Error listing S3 buckets: {e.output}")
-        sys.exit(1)
-
-    try:
-        objects = json.loads(result)
-    except json.JSONDecodeError:
-        print("Failed to parse S3 list output.")
-        return []
-
-    matched_keys = []
-    for obj in objects:
-        key = obj["Key"]
-        if key[0:key.find("/")] == index:
-            match = re.search(r'db_(\d+)_(\d+)_\d+/rawdata/journal\.zst$', key)
-            if not match:
+    found: list[tuple[int, int, str]] = []
+    with os.scandir(source) as entries:
+        for entry in entries:
+            if not entry.is_dir(follow_symlinks=False):
                 continue
-            start_epoch, end_epoch = int(match.group(1)), int(match.group(2))
-            if end_epoch >= oldest_epoch_time and start_epoch <= newest_epoch_time:
-                matched_keys.append(key)
+            bucket = parse_bucket_name(entry.name)
+            if bucket is None:
+                eprint(f"Warning: skipping invalid bucket directory: {entry.name}")
+                continue
+            if (
+                int(bucket["newest"]) >= oldest_epoch_time
+                and int(bucket["oldest"]) <= newest_epoch_time
+            ):
+                found.append(
+                    (int(bucket["oldest"]), int(bucket["newest"]), entry.name)
+                )
 
-    print(f"The number of bucket(s) found in S3: {len(matched_keys)}.\n")
-    
-    if oldest_epoch_time == 0:
-        matched_dbbucket_names = [key.split("/")[1] for key in matched_keys]
-        index = key.split("/")[0]
-        return index, matched_dbbucket_names
-    else:
-        for key in matched_keys:
-            local_path = os.path.join(frozendb, os.path.dirname(key))
-            os.makedirs(local_path, exist_ok=True)
-            full_local_file_path = os.path.join(frozendb, key)
-            print(f"Downloading {key} to {full_local_file_path}")
-            get_cmd = ["aws", "s3api", "get-object", "--bucket", bucket_name, "--key", key, full_local_file_path]
-            if s3_endpoint:
-                get_cmd += ["--endpoint-url", s3_endpoint]
-            subprocess.run(get_cmd)
+    found.sort()
+    names = [item[2] for item in found]
+    print(f"The number of bucket(s) found in the local path: {len(names)}.")
+    return names
 
 
-def copy_buckets(source_path, dest_path, buckets_found):
-    '''Copies buckets from frozendb to thaweddb.'''
-    print("---------------------------")
-    print("Copying Buckets...")
-    for bucket in buckets_found:
-        source_file = source_path + bucket
-        destination = dest_path + bucket
-        shutil.copytree(source_file, destination)
-    print("Buckets are successfully moved...")
-    print("---------------------------")
-    return None
+def bucket_date_range(buckets_found: Sequence[str]) -> tuple[int, int]:
+    parsed = [parse_bucket_name(name) for name in buckets_found]
+    buckets = [bucket for bucket in parsed if bucket is not None]
+    if not buckets:
+        raise RuntimeError("No valid buckets were found")
+    oldest = min(int(bucket["oldest"]) for bucket in buckets)
+    newest = max(int(bucket["newest"]) for bucket in buckets)
+    return oldest, newest
 
 
-def check_data_integrity(source_path, buckets_found, splunk_home):
-    '''Checks data integrity of buckets one by one.'''
-    path = os.getcwd()
-    buckets_failed_integrity, buckets_passed_integrity, buckets_not_checked_integrity = [], [], []
-    buckets_to_process = buckets_found
+def find_oldest_and_newest_bucket_dates(
+    buckets_found: Sequence[str],
+    source_path: str = "",
+    index: str = "",
+    timezone_name: str | None = None,
+) -> tuple[int, int]:
+    """Print and return the true outer date range of the supplied buckets."""
 
-    for bucket in buckets_found:
-        bucket_path = source_path + bucket + "/rawdata/"
-        for filename in os.listdir(bucket_path):
-            if not filename.startswith("l2Hash") and (int(len(os.listdir(bucket_path)) < 3)):
-                buckets_not_checked_integrity.append(bucket)
-            os.chdir(path)
-    buckets_to_process = list(set(buckets_to_process) - set(buckets_not_checked_integrity))
+    oldest, newest = bucket_date_range(buckets_found)
+    if not index and source_path:
+        index = Path(source_path).expanduser().resolve().name
+    print(f"For {index!r} index")
+    print(
+        f"Oldest date: {format_epoch(oldest, timezone_name)!r}, "
+        f"newest date: {format_epoch(newest, timezone_name)!r}."
+    )
+    return oldest, newest
 
-    subprocess.run(["cd", f"{(splunk_home + '/bin') or '/opt/splunk/bin'}"])
-    for bucket in buckets_to_process:
-        bucket_path = source_path + bucket
-        integrity_result = subprocess.check_output(
-            [f"{splunk_home}/bin/splunk check-integrity -bucketPath {bucket_path}"],
-            shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
-        print(integrity_result)
-        match = re.findall(r'succeeded=(\d),\sfailed=(\d)', integrity_result)
-        if not match:
-            print(f"Warning: Could not parse integrity result for bucket '{bucket}'.")
-            buckets_failed_integrity.append(bucket)
+
+def _command_output(result: subprocess.CompletedProcess[str]) -> str:
+    return "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
+
+
+def _failure_text(exc: BaseException) -> str:
+    if isinstance(exc, subprocess.CalledProcessError):
+        output = "\n".join(
+            str(part) for part in (exc.stdout, exc.stderr) if part
+        ).strip()
+        return output or str(exc)
+    return str(exc)
+
+
+def list_s3_objects(
+    bucket_name: str,
+    index: str,
+    endpoint: str = "",
+    aws_binary: str = "aws",
+    runner: Runner = run_command,
+) -> list[dict[str, object]]:
+    validate_index(index)
+    command = [
+        aws_binary,
+        "s3api",
+        "list-objects-v2",
+        "--bucket",
+        bucket_name,
+        "--prefix",
+        f"{index}/",
+        "--query",
+        "Contents[].{Key: Key, Size: Size, ETag: ETag}",
+        "--output",
+        "json",
+    ]
+    if endpoint:
+        command.extend(["--endpoint-url", endpoint])
+    try:
+        result = runner(command, check=True, capture_output=True, text=True)
+    except (subprocess.SubprocessError, OSError) as exc:
+        raise RuntimeError(f"Unable to list S3 objects: {_failure_text(exc)}") from exc
+
+    try:
+        objects = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("AWS CLI returned invalid JSON") from exc
+    if objects is None:
+        objects = []
+    if not isinstance(objects, list):
+        raise RuntimeError("AWS CLI returned an unexpected object-list response")
+    if any(not isinstance(item, dict) or not isinstance(item.get("Key"), str) for item in objects):
+        raise RuntimeError("AWS CLI returned an object without a valid Key")
+    for item in objects:
+        if "Size" in item and (type(item["Size"]) is not int or item["Size"] < 0):
+            raise RuntimeError("AWS CLI returned an invalid object Size")
+    return objects
+
+
+def parse_s3_journal_key(key: str, expected_index: str) -> dict[str, object] | None:
+    parts = key.split("/")
+    if len(parts) != 4 or any(part in {"", ".", ".."} for part in parts):
+        return None
+    if parts[0] != expected_index:
+        return None
+    if parts[2] != "rawdata" or parts[3] not in JOURNALS:
+        return None
+    bucket = parse_bucket_name(parts[1])
+    if bucket is None:
+        return None
+    return {"key": key, "bucket": bucket}
+
+
+def filter_s3_bucket_objects(
+    objects: Iterable[dict[str, object]],
+    index: str,
+    oldest_epoch_time: int,
+    newest_epoch_time: int,
+) -> list[dict[str, object]]:
+    matched: dict[str, dict[str, object]] = {}
+    for item in objects:
+        key = item.get("Key")
+        if not isinstance(key, str):
             continue
-        fail = int(match[0][1])
-        if fail == 1:
-            buckets_failed_integrity.append(bucket)
-            print(f"Integrity check failed for {bucket}")
-        else:
-            buckets_passed_integrity.append(bucket)
-
-    print("Data integrity check completed.")
-    print(f"Failed: {len(buckets_failed_integrity)}, Passed: {len(buckets_passed_integrity)}, No Check: {len(buckets_not_checked_integrity)}")
-    buckets_found = list(set(buckets_found) - set(buckets_failed_integrity))
-    os.chdir(path)
-    return buckets_found, buckets_failed_integrity, buckets_passed_integrity, buckets_not_checked_integrity
-
-
-def log_data_integrity(buckets_not_checked_integrity, buckets_failed_integrity, buckets_passed_integrity, splunk_home):
-    '''Logs integrity results to file.'''
-    path = os.getcwd()
-    log_path = splunk_home + "/var/log/splunk/"
-    os.makedirs(log_path, exist_ok=True)
-    os.chdir(log_path)
-
-    file_name = datetime.now().strftime("%Y-%m-%d-%H-%M-%S_integrity_check.log")
-    with open(file_name, "w+") as f:
-        f.write(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\r\n\r\n")
-        f.write("---- Buckets Failed ----\r\n")
-        for b in buckets_failed_integrity:
-            f.write(f"- {b}\r\n")
-        f.write("\n---- Buckets Passed ----\r\n")
-        for b in buckets_passed_integrity:
-            f.write(f"- {b}\r\n")
-        f.write("\n---- No Integrity Check ----\r\n")
-        for b in buckets_not_checked_integrity:
-            f.write(f"- {b}\r\n")
-    os.chdir(path)
-    return None
+        parsed = parse_s3_journal_key(key, index)
+        if parsed is None:
+            continue
+        bucket = parsed["bucket"]
+        assert isinstance(bucket, dict)
+        if (
+            int(bucket["newest"]) >= oldest_epoch_time
+            and int(bucket["oldest"]) <= newest_epoch_time
+        ):
+            matched.setdefault(str(bucket["name"]), parsed)
+    return sorted(
+        matched.values(),
+        key=lambda item: (
+            int(item["bucket"]["oldest"]),  # type: ignore[index]
+            int(item["bucket"]["newest"]),  # type: ignore[index]
+            str(item["bucket"]["name"]),  # type: ignore[index]
+        ),
+    )
 
 
-def rebuild_buckets(buckets_found, dest_path, dest_index, splunk_home):
-    '''Rebuilds buckets in thaweddb.'''
-    buckets_failed, buckets_passed = [], []
-    path = os.getcwd()
-    subprocess.run(["cd", f"{(splunk_home + '/bin') or '/opt/splunk/bin'}"], stdout=subprocess.PIPE)
-    for bucket in buckets_found:
+def safe_s3_target(root: str | os.PathLike[str], key: str) -> Path:
+    parts = key.split("/")
+    if not parts or any(
+        part in {"", ".", ".."} or "\\" in part or ":" in part
+        or any(ord(char) < 32 for char in part) for part in parts
+    ):
+        raise RuntimeError(f"Unsafe S3 key: {key}")
+    root_path = Path(root).expanduser().resolve()
+    current = root_path
+    for part in parts:
+        current = current / part
+        if current.is_symlink():
+            raise RuntimeError(f"Symlink in S3 destination: {current}")
+    target = root_path.joinpath(*parts).resolve()
+    if target != root_path and root_path not in target.parents:
+        raise RuntimeError(f"S3 key escapes the destination directory: {key}")
+    return target
+
+
+def download_s3_objects(
+    objects: Sequence[dict[str, object]],
+    bucket_name: str,
+    destination_root: str | os.PathLike[str],
+    endpoint: str = "",
+    aws_binary: str = "aws",
+    runner: Runner = run_command,
+) -> list[Path]:
+    downloaded: list[Path] = []
+    for item in objects:
+        key = str(item["key"])
+        target = safe_s3_target(destination_root, key)
+        if target.exists():
+            raise RuntimeError(f"Target already exists: {target}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(f"{target.name}.part-{uuid.uuid4().hex}")
+        command = [
+            aws_binary,
+            "s3api",
+            "get-object",
+            "--bucket",
+            bucket_name,
+            "--key",
+            key,
+            str(temporary),
+        ]
+        if endpoint:
+            command.extend(["--endpoint-url", endpoint])
+        if item.get("etag"):
+            command.extend(["--if-match", str(item["etag"])])
         try:
-            subprocess.check_output(
-                [f"{splunk_home}/bin/splunk rebuild {dest_path}{bucket} {dest_index}"],
-                shell=True, universal_newlines=True)
-            buckets_passed.append(bucket)
-        except subprocess.CalledProcessError as e:
-            print(f"Error rebuilding bucket '{bucket}': {e}")
-            buckets_failed.append(bucket)
-    os.chdir(path)
-    print("---------------------------")
-    print("Buckets rebuild completed.")
-    print(f"Success: {len(buckets_passed)}, Failed: {len(buckets_failed)}")
-    print("---------------------------")
-    return buckets_passed, buckets_failed
+            runner(command, check=True, capture_output=True, text=True)
+            if "size" in item and temporary.stat().st_size != item["size"]:
+                raise RuntimeError(f"Size mismatch for S3 object {key!r}")
+            os.replace(temporary, target)
+        except (subprocess.SubprocessError, OSError) as exc:
+            raise RuntimeError(
+                f"Unable to download S3 object {key!r}: {_failure_text(exc)}"
+            ) from exc
+        finally:
+            temporary.unlink(missing_ok=True)
+        print(f"Downloaded {key} to {target}")
+        downloaded.append(target)
+    return downloaded
 
 
-def restart_splunk(splunk_home):
-    '''Restarts the Splunk instance.'''
-    print("Restarting Splunk...")
-    subprocess.run(["cd", f"{(splunk_home + '/bin') or '/opt/splunk/bin'}"])
-    result = subprocess.check_output(f"{splunk_home}/bin/splunk restart", shell=True, universal_newlines=True)
-    print(result)
-    return None
+def restore_buckets_from_s3(
+    index: str,
+    frozendb: str,
+    oldest_epoch_time: int,
+    newest_epoch_time: int,
+    bucket_name: str,
+    s3_endpoint: str = "",
+    aws_binary: str = "aws",
+    runner: Runner = run_command,
+    download: bool = True,
+) -> list[str]:
+    objects = list_s3_objects(
+        bucket_name, index, s3_endpoint, aws_binary, runner
+    )
+    matched = filter_s3_bucket_objects(
+        objects, index, oldest_epoch_time, newest_epoch_time
+    )
+    print(f"The number of bucket(s) found in S3: {len(matched)}.")
+    names = [str(item["bucket"]["name"]) for item in matched]  # type: ignore[index]
+    if download and matched:
+        root = Path(frozendb).expanduser().resolve()
+        selected = set(names)
+        manifest: list[dict[str, object]] = []
+        for item in objects:
+            key = str(item["Key"])
+            parts = key.split("/")
+            if len(parts) < 3 or parts[0] != index or parts[1] not in selected:
+                continue
+            # S3 directory markers contain no archive data.
+            if key.endswith("/") and item.get("Size") == 0:
+                continue
+            safe_s3_target(root, key)
+            record: dict[str, object] = {"key": key}
+            if "Size" in item:
+                record["size"] = item["Size"]
+            if item.get("ETag"):
+                record["etag"] = item["ETag"]
+            manifest.append(record)
+        destination = safe_s3_target(root, index)
+        for name in names:
+            target = destination / name
+            if os.path.lexists(target):
+                raise RuntimeError(f"S3 cache bucket already exists: {target}")
+        root.mkdir(parents=True, exist_ok=True)
+        download_size = sum(int(item.get("size", 0)) for item in manifest)
+        if download_size > shutil.disk_usage(root).free:
+            raise RuntimeError(f"Insufficient disk space to download {download_size} bytes")
+        # Publish only after *all* files have downloaded successfully; never mix
+        # a fresh archive with files left by a previous restore attempt.
+        with tempfile.TemporaryDirectory(prefix=".s3-staging-", dir=root) as staging:
+            download_s3_objects(
+                manifest, bucket_name, staging, s3_endpoint, aws_binary, runner
+            )
+            staged_source = Path(staging) / index
+            for name in names:
+                validate_bucket_tree(staged_source / name)
+            destination.mkdir(parents=True, exist_ok=True)
+            _commit_staged_buckets(staged_source, destination, names)
+    return names
 
 
-def archive_help():
-    '''Argument parser for the script.'''
-    parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("-f", "--frozendb", type=str, help="Path where frozen buckets are stored")
-    parser.add_argument("-t", "--thaweddb", type=str, help="Path to rebuild (thaweddb)")
-    parser.add_argument("-i", "--index", type=str, help="Index name for rebuilding")
-    parser.add_argument("-o", "--oldest_time", type=str, help="Oldest log time (YYYY-MM-DD HH:MM:SS)")
-    parser.add_argument("-n", "--newest_time", type=str, help="Newest log time (YYYY-MM-DD HH:MM:SS)")
-    parser.add_argument("-s", "--splunk_home", type=str, help="Splunk home path")
-    parser.add_argument("--restart_splunk", action='store_const', const=restart_splunk)
-    parser.add_argument("--check_integrity", action='store_const', const=check_data_integrity)
-    parser.add_argument("-s3", "--s3_path", type=str, help="S3 custom endpoint")
-    parser.add_argument("-s3b", "--s3_default_bucket", type=str, help="Default S3 bucket name")
-    parser.add_argument("--version", action="version", version="%(prog)s 1.0.0", help="show program's version number and exit")
-    return parser.parse_args()
+def _existing_bucket_ids(index_root: Path, destination: Path) -> dict[str, Path]:
+    existing: dict[str, Path] = {}
+    for directory in {destination, *(index_root / name for name in ("db", "colddb", "thaweddb"))}:
+        if not directory.is_dir():
+            continue
+        for entry in directory.iterdir():
+            if not entry.is_dir():
+                continue
+            bucket = parse_bucket_name(entry.name)
+            if bucket:
+                existing.setdefault(str(bucket["id"]), entry)
+    return existing
 
 
-def main():
-    args = archive_help()
-    if args.newest_time and args.oldest_time:
-        oldest_epoch_time, newest_epoch_time = handle_dates(args.oldest_time, args.newest_time)
-        # buckets_found = find_buckets(args.frozendb, oldest_epoch_time, newest_epoch_time)
-        frozendb = args.frozendb + args.index + "/"
+def validate_bucket_tree(bucket: Path) -> int:
+    """Reject unsafe archive entries and return the total regular-file size."""
+    if not bucket.is_dir() or bucket.is_symlink():
+        raise RuntimeError(f"Source bucket is not a safe directory: {bucket}")
+    total = 0
+    pending = [bucket]
+    while pending:
+        with os.scandir(pending.pop()) as entries:
+            for entry in entries:
+                info = entry.stat(follow_symlinks=False)
+                if stat.S_ISLNK(info.st_mode):
+                    raise RuntimeError(f"Symlink in archive bucket: {entry.path}")
+                if stat.S_ISDIR(info.st_mode):
+                    pending.append(Path(entry.path))
+                elif stat.S_ISREG(info.st_mode):
+                    total += info.st_size
+                else:
+                    raise RuntimeError(f"Non-regular archive file: {entry.path}")
+    if not any(
+        (bucket / "rawdata" / name).is_file()
+        and (bucket / "rawdata" / name).stat().st_size > 0
+        for name in JOURNALS
+    ):
+        raise RuntimeError(f"Missing or empty rawdata journal in {bucket}")
+    return total
 
-        if args.check_integrity and not args.s3_path:
-            buckets_found, buckets_failed_integrity, buckets_passed_integrity, buckets_not_checked_integrity = \
-                check_data_integrity(args.frozendb, buckets_found, args.splunk_home)
-            log_data_integrity(buckets_not_checked_integrity, buckets_failed_integrity, buckets_passed_integrity, args.splunk_home)
 
-        if args.s3_default_bucket:
-            args.s3_path = args.s3_path if args.s3_path else ""
-            restore_buckets_from_s3(args.index, args.frozendb, oldest_epoch_time, newest_epoch_time, args.s3_default_bucket, args.s3_path)
-            buckets_found = find_buckets(frozendb, oldest_epoch_time, newest_epoch_time)
-            
+def _commit_staged_buckets(staging: Path, destination: Path, names: Sequence[str]) -> list[Path]:
+    committed: list[Path] = []
+    try:
+        for name in names:
+            target = destination / name
+            if os.path.lexists(target):
+                raise RuntimeError(f"Target appeared during copy: {target}")
+            (staging / name).rename(target)
+            committed.append(target)
+    except BaseException:
+        for target in reversed(committed):
+            shutil.rmtree(target)
+        raise
+    return committed
+
+
+@contextmanager
+def destination_lock(destination: str | os.PathLike[str]):
+    """Serialize this CLI's restore jobs through rebuild/restart.
+
+    A hard kill leaves a lock intentionally: operators must inspect the target
+    before removing it. Splunk and other tools do not participate in this lock.
+    """
+    root = Path(destination).expanduser().resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    lock = root / ".restore.lock"
+    try:
+        handle = lock.open("x", encoding="utf-8")
+    except FileExistsError as exc:
+        raise RuntimeError(f"Restore lock already exists; inspect before retrying: {lock}") from exc
+    try:
+        with handle:
+            handle.write(f"pid={os.getpid()}\n")
+        yield
+    finally:
+        lock.unlink()
+
+
+def copy_buckets(
+    source_path: str | os.PathLike[str],
+    dest_path: str | os.PathLike[str],
+    buckets_found: Sequence[str],
+) -> list[Path]:
+    """Preflight and stage copies; each rename is atomic, not the entire batch."""
+
+    if not buckets_found:
+        raise RuntimeError("No buckets were selected for copying")
+    source = Path(source_path).expanduser().resolve()
+    destination = Path(dest_path).expanduser().resolve()
+    if source == destination or source in destination.parents or destination in source.parents:
+        raise RuntimeError("Source and destination paths overlap")
+    destination.mkdir(parents=True, exist_ok=True)
+    existing_ids = _existing_bucket_ids(destination.parent, destination)
+    incoming_ids: set[str] = set()
+    total_size = 0
+
+    for name in buckets_found:
+        bucket = parse_bucket_name(name)
+        if bucket is None:
+            raise RuntimeError(f"Invalid bucket name selected for copying: {name}")
+        source_bucket = source / name
+        target_bucket = destination / name
+        total_size += validate_bucket_tree(source_bucket)
+        if os.path.lexists(target_bucket):
+            raise RuntimeError(f"Target bucket already exists: {target_bucket}")
+        bucket_id = str(bucket["id"])
+        if bucket_id in incoming_ids:
+            raise RuntimeError(f"Duplicate incoming bucket ID: {bucket_id}")
+        if bucket_id in existing_ids:
+            raise RuntimeError(
+                f"Bucket ID {bucket_id!r} conflicts with {existing_ids[bucket_id]}"
+            )
+        incoming_ids.add(bucket_id)
+
+    if total_size > shutil.disk_usage(destination).free:
+        raise RuntimeError(f"Insufficient disk space to copy {total_size} bytes to {destination}")
+
+    staging = destination / f".restore-staging-{uuid.uuid4().hex}"
+    try:
+        staging.mkdir()
+        for name in buckets_found:
+            # Preserve any link introduced after preflight instead of following
+            # it outside the archive; the staged validation then rejects it.
+            shutil.copytree(source / name, staging / name, symlinks=True)
+            validate_bucket_tree(staging / name)
+        committed = _commit_staged_buckets(staging, destination, buckets_found)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+    print(f"Successfully copied {len(committed)} bucket(s).")
+    return committed
+
+
+def splunk_binary(splunk_home: str | os.PathLike[str]) -> Path:
+    binary = Path(splunk_home).expanduser().resolve() / "bin" / "splunk"
+    if not binary.is_file():
+        raise RuntimeError(f"Splunk executable does not exist: {binary}")
+    if not os.access(binary, os.X_OK):
+        raise RuntimeError(f"Splunk file is not executable: {binary}")
+    return binary
+
+
+def check_data_integrity(
+    source_path: str | os.PathLike[str],
+    buckets_found: Sequence[str],
+    splunk_home: str | os.PathLike[str],
+    allow_unverified: bool = False,
+    runner: Runner = run_command,
+) -> tuple[list[str], list[str], list[str], list[str]]:
+    """Return allowed, failed, passed, and unverified bucket names."""
+
+    source = Path(source_path).expanduser().resolve()
+    binary = splunk_binary(splunk_home)
+    failed: list[str] = []
+    passed: list[str] = []
+    unverified: list[str] = []
+
+    for name in buckets_found:
+        if parse_bucket_name(name) is None:
+            raise RuntimeError(f"Invalid bucket name: {name}")
+        validate_bucket_tree(source / name)
+        rawdata = source / name / "rawdata"
+        if not rawdata.is_dir():
+            eprint(f"Integrity check failed: rawdata directory is missing for {name}")
+            failed.append(name)
+            continue
+        has_hash = any(
+            entry.is_file() and entry.name.startswith("l2Hash")
+            for entry in rawdata.iterdir()
+        )
+        if not has_hash:
+            unverified.append(name)
+            continue
+        command = [
+            str(binary),
+            "check-integrity",
+            "-bucketPath",
+            str(source / name),
+        ]
+        try:
+            result = runner(command, check=True, capture_output=True, text=True)
+        except (subprocess.SubprocessError, OSError) as exc:
+            eprint(f"Integrity command failed for {name}: {_failure_text(exc)}")
+            failed.append(name)
+            continue
+        matches = INTEGRITY_PATTERN.findall(_command_output(result))
+        if not matches:
+            eprint(f"Could not parse integrity output for {name}")
+            failed.append(name)
+        elif any(int(failed_count) > 0 for _, failed_count in matches) or not any(
+            int(succeeded) > 0 for succeeded, _ in matches
+        ):
+            failed.append(name)
         else:
-            buckets_found = find_buckets(frozendb, oldest_epoch_time, newest_epoch_time)
+            passed.append(name)
 
-        copy_buckets(frozendb, args.thaweddb, buckets_found)
+    allowed_names = set(passed)
+    if allow_unverified:
+        allowed_names.update(unverified)
+    allowed = [name for name in buckets_found if name in allowed_names]
+    print(
+        "Data integrity check completed. "
+        f"Failed: {len(failed)}, Passed: {len(passed)}, "
+        f"Unverified: {len(unverified)}"
+    )
+    return allowed, failed, passed, unverified
 
-        buckets_passed, buckets_failed = rebuild_buckets(buckets_found, args.thaweddb, args.index, args.splunk_home)
-        if args.restart_splunk:
-            restart_splunk(args.splunk_home)
-    else:
-        newest_epoch_time = int(time.time())
+
+def log_data_integrity(
+    buckets_not_checked_integrity: Sequence[str],
+    buckets_failed_integrity: Sequence[str],
+    buckets_passed_integrity: Sequence[str],
+    splunk_home: str | os.PathLike[str],
+) -> Path:
+    log_directory = Path(splunk_home).expanduser().resolve() / "var" / "log" / "splunk"
+    log_directory.mkdir(parents=True, exist_ok=True)
+    log_path = log_directory / datetime.now().strftime(
+        "%Y-%m-%d-%H-%M-%S-%f_integrity_check.log"
+    )
+    with log_path.open("x", encoding="utf-8", newline="\n") as handle:
+        handle.write(f"Timestamp: {datetime.now().strftime(DATE_FORMAT)}\n\n")
+        for title, values in (
+            ("Buckets Failed", buckets_failed_integrity),
+            ("Buckets Passed", buckets_passed_integrity),
+            ("Buckets Unverified", buckets_not_checked_integrity),
+        ):
+            handle.write(f"---- {title} ----\n")
+            for name in values:
+                handle.write(f"- {name}\n")
+            handle.write("\n")
+    return log_path
+
+
+def rebuild_buckets(
+    buckets_found: Sequence[str],
+    dest_path: str | os.PathLike[str],
+    dest_index: str,
+    splunk_home: str | os.PathLike[str],
+    runner: Runner = run_command,
+) -> tuple[list[str], list[str]]:
+    binary = splunk_binary(splunk_home)
+    destination = Path(dest_path).expanduser().resolve()
+    passed: list[str] = []
+    failed: list[str] = []
+    for name in buckets_found:
+        command = [str(binary), "rebuild", str(destination / name), dest_index]
+        try:
+            result = runner(command, check=True, capture_output=True, text=True)
+        except (subprocess.SubprocessError, OSError) as exc:
+            eprint(f"Error rebuilding bucket {name!r}: {_failure_text(exc)}")
+            failed.append(name)
+            continue
+        output = _command_output(result)
+        if output:
+            print(output)
+        passed.append(name)
+    print(
+        f"Buckets rebuild completed. Success: {len(passed)}, Failed: {len(failed)}"
+    )
+    return passed, failed
+
+
+def restart_splunk(
+    splunk_home: str | os.PathLike[str],
+    runner: Runner = run_command,
+) -> None:
+    binary = splunk_binary(splunk_home)
+    try:
+        result = runner(
+            [str(binary), "restart"], check=True, capture_output=True, text=True
+        )
+    except (subprocess.SubprocessError, OSError) as exc:
+        raise RuntimeError(f"Unable to restart Splunk: {_failure_text(exc)}") from exc
+    output = _command_output(result)
+    if output:
+        print(output)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Restore archived Splunk buckets (procedural v1.1).",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument("-f", "--frozendb", help="Frozen bucket root path")
+    parser.add_argument("-t", "--thaweddb", help="Target thaweddb path")
+    parser.add_argument("-i", "--index", help="Target index name")
+    escaped_format = DATE_FORMAT.replace("%", "%%")
+    parser.add_argument("-o", "--oldest_time", help=f"Oldest time ({escaped_format})")
+    parser.add_argument("-n", "--newest_time", help=f"Newest time ({escaped_format})")
+    parser.add_argument("-s", "--splunk_home", help="Splunk home path")
+    parser.add_argument("--restart_splunk", action="store_true")
+    parser.add_argument("--check_integrity", action="store_true")
+    parser.add_argument(
+        "--allow_unverified_buckets",
+        action="store_true",
+        help="Allow unsigned buckets when integrity checking is requested",
+    )
+    parser.add_argument("-s3", "--s3_path", help="Custom S3 endpoint URL")
+    parser.add_argument("-s3b", "--s3_default_bucket", help="S3 bucket name")
+    parser.add_argument("--timezone", help="IANA timezone, for example Europe/Istanbul")
+    parser.add_argument("--aws_binary", default="aws", help="AWS CLI executable")
+    parser.add_argument("--command_timeout", type=float, default=3600,
+                        help="Maximum seconds per AWS/Splunk command")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
+    return parser
+
+
+def archive_help(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def validate_args(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+) -> bool:
+    if args.index:
+        try:
+            validate_index(args.index)
+        except ValueError as exc:
+            parser.error(str(exc))
+    if not math.isfinite(args.command_timeout) or args.command_timeout <= 0:
+        parser.error("--command_timeout must be a finite positive number")
+    if bool(args.oldest_time) != bool(args.newest_time):
+        parser.error("--oldest_time and --newest_time must be supplied together")
+    if args.s3_path and not args.s3_default_bucket:
+        parser.error("--s3_path requires --s3_default_bucket")
+    if args.allow_unverified_buckets and not args.check_integrity:
+        parser.error("--allow_unverified_buckets requires --check_integrity")
+
+    restore_mode = bool(args.oldest_time and args.newest_time)
+    if restore_mode:
+        required = {
+            "--frozendb": args.frozendb,
+            "--thaweddb": args.thaweddb,
+            "--index": args.index,
+            "--splunk_home": args.splunk_home,
+        }
+        missing = [name for name, value in required.items() if not value]
+        if missing:
+            parser.error(f"Restore mode requires: {', '.join(missing)}")
+    elif args.s3_default_bucket:
+        if not args.index:
+            parser.error("S3 inventory mode requires --index")
+    elif not args.frozendb:
+        parser.error("Local inventory mode requires --frozendb")
+    return restore_mode
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    restore_mode = validate_args(parser, args)
+    runner = partial(run_command, timeout=args.command_timeout)
+
+    try:
+        if restore_mode:
+            oldest, newest = handle_dates(
+                args.oldest_time, args.newest_time, args.timezone
+            )
+            frozen_root = Path(args.frozendb).expanduser().resolve()
+            source_path = frozen_root / args.index
+            splunk_binary(args.splunk_home)
+            destination = Path(args.thaweddb).expanduser().resolve()
+            resolved_source = source_path.resolve()
+            if (resolved_source == destination or resolved_source in destination.parents
+                    or destination in resolved_source.parents):
+                raise RuntimeError("Source and destination paths overlap")
+
+            if args.s3_default_bucket:
+                buckets = restore_buckets_from_s3(
+                    args.index,
+                    str(frozen_root),
+                    oldest,
+                    newest,
+                    args.s3_default_bucket,
+                    args.s3_path or "",
+                    args.aws_binary,
+                    runner=runner,
+                )
+            else:
+                buckets = find_buckets(source_path, oldest, newest)
+            if not buckets:
+                raise RuntimeError("No matching buckets were found")
+
+            if args.check_integrity:
+                allowed, failed, passed, unverified = check_data_integrity(
+                    source_path,
+                    buckets,
+                    args.splunk_home,
+                    args.allow_unverified_buckets,
+                    runner=runner,
+                )
+                log_path = log_data_integrity(
+                    unverified, failed, passed, args.splunk_home
+                )
+                print(f"Integrity log: {log_path}")
+                if failed or (unverified and not args.allow_unverified_buckets):
+                    raise RuntimeError(
+                        "Integrity verification rejected selected buckets; "
+                        "nothing will be copied or rebuilt"
+                    )
+                buckets = allowed
+                if not buckets:
+                    raise RuntimeError("No buckets remain after integrity verification")
+
+            with destination_lock(args.thaweddb):
+                copy_buckets(source_path, args.thaweddb, buckets)
+                _, failed = rebuild_buckets(
+                    buckets, args.thaweddb, args.index, args.splunk_home, runner=runner
+                )
+                if failed:
+                    raise RuntimeError(
+                        f"{len(failed)} bucket(s) failed to rebuild; "
+                        "copies remain in the target for diagnosis; "
+                        "Splunk will not be restarted"
+                    )
+                if args.restart_splunk:
+                    restart_splunk(args.splunk_home, runner=runner)
+            return 0
+
+        newest = int(time.time())
         if args.s3_default_bucket:
-            args.s3_path = args.s3_path if args.s3_path else ""
-            index, buckets_found = restore_buckets_from_s3(args.index, args.frozendb, 0, newest_epoch_time, args.s3_default_bucket, args.s3_path)
-            find_oldest_and_newest_bucket_dates(buckets_found, index=index)
+            buckets = restore_buckets_from_s3(
+                args.index,
+                args.frozendb or ".",
+                0,
+                newest,
+                args.s3_default_bucket,
+                args.s3_path or "",
+                args.aws_binary,
+                runner=runner,
+                download=False,
+            )
+            index_name = args.index
         else:
-            buckets_found = find_buckets(args.frozendb, 0, newest_epoch_time)
-            find_oldest_and_newest_bucket_dates(buckets_found, source_path=args.frozendb)
+            source_path = Path(args.frozendb).expanduser()
+            if args.index:
+                source_path = source_path / args.index
+            buckets = find_buckets(source_path, 0, newest)
+            index_name = args.index or source_path.resolve().name
+        find_oldest_and_newest_bucket_dates(
+            buckets, index=index_name, timezone_name=args.timezone
+        )
+        return 0
+    except (RuntimeError, ValueError, OSError, OverflowError) as exc:
+        eprint(f"Error: {exc}")
+        return 1
+    except KeyboardInterrupt:
+        eprint("Interrupted; inspect the target before retrying (rebuild may be incomplete)")
+        return 130
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
