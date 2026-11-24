@@ -115,3 +115,8 @@ vendor/
 
 ### KamuSM timestamp tests ###
 kamusm_signature_script/tests/output/
+
+# Working notes (seynur-skills docs-layout)
+notes/
+.ruff_cache/
+.pytest_cache/
